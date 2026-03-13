@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for Teams Manager","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-save","fs:allow-write-text-file","fs:allow-read-text-file","fs:allow-mkdir","fs:allow-exists","fs:allow-app-read-recursive","fs:allow-app-write-recursive","opener:default"]}}

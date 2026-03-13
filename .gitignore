@@ -1,0 +1,42 @@
+# Node
+node_modules/
+dist/
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# Tauri / Rust build
+src-tauri/target/
+target/
+**/*.pdb
+**/*.exe
+**/*.dll
+**/*.lib
+**/*.exp
+**/*.rlib
+**/*.d
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local app config / tokens
+config.json
+token.json

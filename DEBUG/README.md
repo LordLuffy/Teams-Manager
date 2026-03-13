@@ -1,9 +1,6 @@
-<<<<<<< HEAD
-# TeamsAnalysis
-=======
 # Teams License & Telephony Manager
 
-Application de bureau Tauri 2 + React + TypeScript pour auditer et gérer les licences et la téléphonie Microsoft 365 / Teams
+Application de bureau Tauri 2 + React + TypeScript pour auditer et gérer les licences et la téléphonie Microsoft 365 / Teams.
 
 ---
 
@@ -138,4 +135,3 @@ TeamsAnalysis/
 | `disconnect` | Efface le token |
 | `fetch_data` | Collecte toutes les données Graph en parallèle |
 | `export_csv` | Ouvre un dialog de sauvegarde et écrit le CSV |
->>>>>>> 8d831b6 (Initial commit)
