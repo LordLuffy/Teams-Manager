@@ -3,7 +3,13 @@
 =======
 # Teams License & Telephony Manager
 
-Application de bureau Tauri 2 + React + TypeScript pour auditer et gérer les licences et la téléphonie Microsoft 365 / Teams
+Application de bureau Tauri 2 + React + TypeScript pour auditer et gérer les licences et la téléphonie Microsoft 365 / Teams.
+
+Outil desktop Tauri + React + Rust pour analyser :
+- licences Teams
+- numéros téléphoniques
+- ressources
+- licences orphelines
 
 ---
 
@@ -51,6 +57,12 @@ La fenêtre s'ouvre sur `http://localhost:1420`. Modifiez les fichiers `src/` et
 ---
 
 ## 3. Build production
+```bash
+npm install
+cd src-tauri
+cargo tauri dev
+
+## 4. Build production
 
 ```bash
 # Compiler le frontend + l'exécutable Tauri
@@ -61,7 +73,7 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 
 ---
 
-## 4. Utilisation
+## 5. Utilisation
 
 1. Au premier lancement : saisir le **Tenant ID** et le **Client ID** Azure AD
 2. Cliquer **Se connecter avec Microsoft** → suivre les instructions du code appareil sur `aka.ms/devicelogin`
@@ -79,7 +91,7 @@ Stocké dans le répertoire de config de l'application :
 
 ---
 
-## 5. Structure du projet
+## 6. Structure du projet
 
 ```
 TeamsAnalysis/
@@ -112,7 +124,7 @@ TeamsAnalysis/
 
 ---
 
-## 6. Endpoints Graph utilisés
+## 7. Endpoints Graph utilisés
 
 | Endpoint | Description |
 |----------|-------------|
@@ -126,7 +138,7 @@ TeamsAnalysis/
 
 ---
 
-## 7. Commandes Tauri exposées au frontend
+## 8. Commandes Tauri exposées au frontend
 
 | Commande | Description |
 |----------|-------------|
