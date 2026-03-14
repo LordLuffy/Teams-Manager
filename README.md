@@ -88,7 +88,8 @@ Stocké dans le répertoire de config de l'application :
 
 ### Fichier de log
 
-- Windows : `%APPDATA%\com.teams-manager.app\logs\teams-manager.log`
+- Windows : `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
+  (`C:\Users\<nom>\AppData\**Local**\com.teams-manager.app\logs\teams-manager.log`)
 
 ---
 
@@ -120,7 +121,7 @@ L'authentification réutilise le token Graph déjà obtenu (`Connect-MicrosoftTe
 
 Les logs sont écrits dans le dossier standard de l'application :
 
-- **Windows** : `%APPDATA%\com.teams-manager.app\logs\teams-manager.log`
+- **Windows** : `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
 
 Nom du fichier : `teams-manager.log`
 

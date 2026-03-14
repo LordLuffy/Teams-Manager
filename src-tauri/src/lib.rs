@@ -368,6 +368,31 @@ async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: Stri
     Ok(path_str)
 }
 
+/// Retourne des infos de diagnostic : PS exe utilisé + chemin du log.
+#[tauri::command]
+fn get_ps_info(app: tauri::AppHandle) -> String {
+    let exe = graph::ps_exe_name();
+    let log_path = app.path().app_log_dir()
+        .map(|p| p.join("teams-manager.log").display().to_string())
+        .unwrap_or_else(|_| "chemin log inconnu".into());
+    format!("Exe PS : {exe} | Log : {log_path}")
+}
+
+/// Ouvre le fichier de log dans l'application par défaut (Bloc-notes, etc.).
+#[tauri::command]
+fn open_log_file(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = app.path().app_log_dir()
+        .map(|p| p.join("teams-manager.log"))
+        .map_err(|e| e.to_string())?;
+    // Crée le fichier s'il n'existe pas encore
+    if !path.exists() {
+        std::fs::write(&path, "").map_err(|e| e.to_string())?;
+    }
+    app.opener().open_path(path.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn install_ps_module() -> Result<String, String> {
     logger::info("Installation du module PowerShell MicrosoftTeams demandée par l'utilisateur.");
@@ -418,6 +443,8 @@ pub fn run() {
             fetch_data,
             export_csv,
             install_ps_module,
+            get_ps_info,
+            open_log_file,
             log_frontend_error,
         ])
         .run(tauri::generate_context!())

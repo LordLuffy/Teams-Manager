@@ -9,20 +9,34 @@ use std::os::windows::process::CommandExt;
 
 // Détection unique de l'exécutable PowerShell optimal.
 // PS7 (pwsh) est requis pour les DLL .NET 8+ du module MicrosoftTeams récent.
+// On teste dans l'ordre : "pwsh" via PATH, puis les chemins d'installation connus.
 static PS_EXE: OnceLock<String> = OnceLock::new();
 
 fn ps_exe() -> &'static str {
     PS_EXE.get_or_init(|| {
-        let mut cmd = Command::new("pwsh");
-        cmd.args(["-NonInteractive", "-NoProfile", "-Command", "exit 0"]);
-        #[cfg(windows)]
-        cmd.creation_flags(0x0800_0000);
-        if cmd.output().map(|o| o.status.success()).unwrap_or(false) {
-            "pwsh".to_string()
-        } else {
-            "powershell".to_string()
+        // Chemins à tester dans l'ordre — le PATH peut ne pas être hérité si Tauri
+        // est lancé depuis un contexte qui n'a pas encore le PS7 PATH à jour.
+        let candidates = [
+            "pwsh",
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Program Files\PowerShell\pwsh.exe",
+        ];
+        for exe in candidates {
+            let mut cmd = Command::new(exe);
+            cmd.args(["-NonInteractive", "-NoProfile", "-Command", "exit 0"]);
+            #[cfg(windows)]
+            cmd.creation_flags(0x0800_0000);
+            if cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+                return exe.to_string();
+            }
         }
+        "powershell".to_string()
     })
+}
+
+/// Retourne l'exécutable PowerShell choisi (pour diagnostics UI).
+pub fn ps_exe_name() -> &'static str {
+    ps_exe()
 }
 
 const V1: &str = "https://graph.microsoft.com/v1.0";
@@ -542,6 +556,9 @@ $ProgressPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Info de version pour diagnostics — visible dans les warnings de l'UI
+$psVer = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+
 try {
     # Import standard, avec fallback par chemin direct (cas OneDrive/PSModulePath non configuré)
     $importOk = $false
@@ -559,12 +576,49 @@ try {
         }
     }
 
-    # Utilise les deux tokens si disponibles (Graph + Teams service), sinon Graph seul
-    $tokens = @($env:TEAMS_TOKEN)
-    if ($env:TEAMS_TOKEN2 -and $env:TEAMS_TOKEN2 -ne '') {
-        $tokens = @($env:TEAMS_TOKEN, $env:TEAMS_TOKEN2)
+    # Version du module pour diagnostic (incluse dans le JSON de sortie)
+    $teamsModVer = (Get-Module MicrosoftTeams -ErrorAction SilentlyContinue).Version
+    if (-not $teamsModVer) {
+        $teamsModVer = (Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue |
+                        Sort-Object Version -Descending | Select-Object -First 1).Version
     }
-    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $tokens -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+    $teamsModVerStr = if ($teamsModVer) { [string]$teamsModVer } else { 'unknown' }
+
+    $graphToken  = $env:TEAMS_TOKEN
+    $teamsToken  = $env:TEAMS_TOKEN2
+    $hasTeams    = $teamsToken -and $teamsToken -ne ''
+
+    # Selon la doc Connect-MicrosoftTeams v5+ : format @(TeamsToken, GraphToken).
+    # On essaie aussi l'ordre inverse et le token seul en fallback.
+    $combos = @()
+    if ($hasTeams) {
+        $combos += ,@($teamsToken, $graphToken)   # Teams first (doc v5+)
+        $combos += ,@($graphToken, $teamsToken)   # Graph first (doc v4)
+        $combos += ,@($teamsToken)                # Teams seul
+    }
+    $combos += ,@($graphToken)                    # Graph seul en dernier recours
+
+    $connectOk  = $false
+    $connectErr = ''
+    foreach ($toks in $combos) {
+        foreach ($envParam in @('Commercial', '')) {
+            try {
+                if ($envParam -ne '') {
+                    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks -Environment $envParam -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+                } else {
+                    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+                }
+                $connectOk = $true
+                break
+            } catch {
+                $connectErr = [string]$_.Exception.Message
+            }
+        }
+        if ($connectOk) { break }
+    }
+    if (-not $connectOk) {
+        throw "Connexion Teams PS échouée (module $teamsModVerStr) : $connectErr"
+    }
 
     $cqError = ''
     $cqs = @()
@@ -612,13 +666,17 @@ try {
                elseif ($aas.Count -eq 1) { '[' + ($aas[0] | ConvertTo-Json -Compress) + ']' }
                else { ConvertTo-Json -InputObject $aas -Depth 3 -Compress }
 
-    $cqErrJson = $cqError | ConvertTo-Json
-    $aaErrJson = $aaError | ConvertTo-Json
-    '{"success":true,"callQueues":' + $cqsJson + ',"autoAttendants":' + $aasJson + ',"cqError":' + $cqErrJson + ',"aaError":' + $aaErrJson + '}'
+    $cqErrJson      = $cqError       | ConvertTo-Json
+    $aaErrJson      = $aaError       | ConvertTo-Json
+    $psVerJson      = $psVer         | ConvertTo-Json
+    $modVerJson     = $teamsModVerStr | ConvertTo-Json
+    '{"success":true,"callQueues":' + $cqsJson + ',"autoAttendants":' + $aasJson + ',"cqError":' + $cqErrJson + ',"aaError":' + $aaErrJson + ',"psVer":' + $psVerJson + ',"modVer":' + $modVerJson + '}'
 } catch {
-    $errMsg = [string]$_.Exception.Message
-    $errJson = $errMsg | ConvertTo-Json
-    '{"success":false,"error":' + $errJson + '}'
+    $errMsg    = [string]$_.Exception.Message
+    $errJson   = $errMsg | ConvertTo-Json
+    $psVerJson = $psVer  | ConvertTo-Json
+    $modVerJson = if ($teamsModVerStr) { $teamsModVerStr | ConvertTo-Json } else { '"unknown"' }
+    '{"success":false,"error":' + $errJson + ',"psVer":' + $psVerJson + ',"modVer":' + $modVerJson + '}'
 }
 "#;
 
@@ -651,13 +709,28 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Opt
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
 
+    crate::logger::info(&format!("PS fetch : lancement via {}", ps_exe()));
+
     let output = cmd.output().map_err(|e| {
         let _ = std::fs::remove_file(&temp_path);
         format!("Lancement PowerShell impossible : {e}")
     })?;
     let _ = std::fs::remove_file(&temp_path);
 
+    crate::logger::info(&format!("PS fetch : exit={} stdout_len={} stderr_len={}",
+        output.status, output.stdout.len(), output.stderr.len()));
+
     let raw = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // Log les 500 premiers caractères de stdout pour diagnostic
+    let preview = raw.chars().take(500).collect::<String>().replace('\n', "↵");
+    crate::logger::info(&format!("PS fetch stdout (500c) : {preview}"));
+
+    let stderr_raw = String::from_utf8_lossy(&output.stderr).to_string();
+    if !stderr_raw.trim().is_empty() {
+        let err_preview = stderr_raw.chars().take(300).collect::<String>().replace('\n', "↵");
+        crate::logger::warn(&format!("PS fetch stderr : {err_preview}"));
+    }
 
     // On prend la dernière ligne qui ressemble à du JSON
     let json_str = raw
@@ -665,29 +738,43 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Opt
         .rev()
         .find(|l| l.trim_start().starts_with('{'))
         .ok_or_else(|| {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let hint = stderr.lines().last().unwrap_or("").trim().to_string();
-            if hint.is_empty() {
+            let hint = stderr_raw.lines().last().unwrap_or("").trim().to_string();
+            let err = if hint.is_empty() {
                 "Aucun JSON retourné par PowerShell (module MicrosoftTeams non installé ?)".to_string()
             } else {
                 format!("Aucun JSON retourné par PowerShell : {hint}")
-            }
+            };
+            crate::logger::warn(&format!("PS fetch : {err}"));
+            err
         })?;
 
     let json: Value = serde_json::from_str(json_str.trim())
         .map_err(|e| format!("JSON PowerShell invalide : {e}"))?;
 
+    let ps_ver = str_val(&json, "psVer");
+    let mod_ver = str_val(&json, "modVer");
+    let ps_exe_used = ps_exe();
+
     if !json.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Err(str_val(&json, "error"));
+        let err = str_val(&json, "error");
+        let full = format!("{err} [PS {ps_ver} via {ps_exe_used}, module {mod_ver}]");
+        crate::logger::warn(&format!("PS fetch error : {full}"));
+        return Err(full);
     }
 
     let mut diagnostics = Vec::new();
+    // Toujours afficher quelle version PS a exécuté le script
+    if !ps_ver.is_empty() {
+        diagnostics.push(format!("PowerShell {ps_ver} ({ps_exe_used})"));
+    }
     let cq_err = str_val(&json, "cqError");
     let aa_err = str_val(&json, "aaError");
     if !cq_err.is_empty() {
+        crate::logger::warn(&format!("PS Get-CsCallQueue error : {cq_err}"));
         diagnostics.push(format!("Get-CsCallQueue : {cq_err}"));
     }
     if !aa_err.is_empty() {
+        crate::logger::warn(&format!("PS Get-CsAutoAttendant error : {aa_err}"));
         diagnostics.push(format!("Get-CsAutoAttendant : {aa_err}"));
     }
 
