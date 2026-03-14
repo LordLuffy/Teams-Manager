@@ -1,18 +1,18 @@
 mod auth;
 mod graph;
+mod logger;
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
 use keyring::Entry;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::Mutex;
+use tauri::Manager;
 
-// ---------------------------------------------------------------------------
-//  App state
-// ---------------------------------------------------------------------------
+/// Etat partagé de l'application côté backend.
 #[derive(Debug, Default)]
 pub struct AppState {
-    pub token:     Mutex<Option<auth::TokenSet>>,
+    pub token: Mutex<Option<auth::TokenSet>>,
     pub tenant_id: Mutex<String>,
     pub client_id: Mutex<String>,
 }
@@ -23,9 +23,6 @@ pub struct AppConfig {
     pub client_id: String,
 }
 
-// ---------------------------------------------------------------------------
-//  Config persistence (app config dir)
-// ---------------------------------------------------------------------------
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
     app.path()
         .app_config_dir()
@@ -43,13 +40,11 @@ fn split_for_windows_keyring(input: &str, max_utf16_units: usize) -> Vec<String>
 
     for ch in input.chars() {
         let ch_units = ch.len_utf16();
-
         if current_units + ch_units > max_utf16_units && !current.is_empty() {
             chunks.push(current);
             current = String::new();
             current_units = 0;
         }
-
         current.push(ch);
         current_units += ch_units;
     }
@@ -62,92 +57,64 @@ fn split_for_windows_keyring(input: &str, max_utf16_units: usize) -> Vec<String>
 }
 
 fn token_account(tenant_id: &str, client_id: &str) -> String {
-    // macOS n'accepte pas service/user vides
     let tenant = if tenant_id.trim().is_empty() { "default-tenant" } else { tenant_id.trim() };
     let client = if client_id.trim().is_empty() { "default-client" } else { client_id.trim() };
     format!("{}::{}", tenant, client)
 }
 
-fn save_token_secure(
-    tenant_id: &str,
-    client_id: &str,
-    token: &auth::TokenSet,
-) -> Result<(), String> {
+fn save_token_secure(tenant_id: &str, client_id: &str, token: &auth::TokenSet) -> Result<(), String> {
     let refresh = token
         .refresh_token
         .as_ref()
-        .ok_or("No refresh token returned by Microsoft")?;
+        .ok_or("Aucun refresh token retourné par Microsoft.")?;
 
     let base_account = token_account(tenant_id, client_id);
-
-    // Nettoie d'abord d'anciens morceaux éventuels
     let _ = delete_token_secure(tenant_id, client_id);
-
     let chunks = split_for_windows_keyring(refresh, TOKEN_CHUNK_SIZE);
-    
-    eprintln!("refresh token total len = {}", refresh.len());
-    eprintln!("refresh token chunks = {}", chunks.len());
-    for (idx, chunk) in chunks.iter().enumerate() {
-        eprintln!(
-            "chunk {}: chars={}, utf16_units={}",
-            idx,
-            chunk.len(),
-            chunk.encode_utf16().count()
-        );
-    }
 
-    // Sauve le nombre de morceaux
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Keyring init meta: {}", e))?;
+        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
     meta_entry
         .set_password(&chunks.len().to_string())
-        .map_err(|e| format!("Keyring save meta: {}", e))?;
+        .map_err(|e| format!("Ecriture keyring (meta) : {e}"))?;
 
-    // Sauve chaque morceau
     for (idx, chunk) in chunks.iter().enumerate() {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Keyring init part {}: {}", idx, e))?;
-
+            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
         entry
             .set_password(chunk)
-            .map_err(|e| format!("Keyring save part {}: {}", idx, e))?;
+            .map_err(|e| format!("Ecriture keyring (partie {idx}) : {e}"))?;
     }
 
+    logger::info("Refresh token stocké dans le coffre-fort système.");
     Ok(())
 }
 
 fn load_token_secure(tenant_id: &str, client_id: &str) -> Result<Option<String>, String> {
     let base_account = token_account(tenant_id, client_id);
-
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Keyring init meta: {}", e))?;
+        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
 
     let count_raw = match meta_entry.get_password() {
         Ok(v) => v,
         Err(keyring::Error::NoEntry) => return Ok(None),
-        Err(e) => return Err(format!("Keyring load meta: {}", e)),
+        Err(e) => return Err(format!("Lecture keyring (meta) : {e}")),
     };
 
     let count: usize = count_raw
         .parse()
-        .map_err(|e| format!("Invalid keyring chunk count: {}", e))?;
+        .map_err(|e| format!("Nombre de segments invalide dans le keyring : {e}"))?;
 
     let mut refresh = String::new();
-
     for idx in 0..count {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Keyring init part {}: {}", idx, e))?;
+            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
 
         let chunk = match entry.get_password() {
             Ok(v) => v,
-            Err(keyring::Error::NoEntry) => {
-                return Err(format!("Missing keyring chunk {}", idx));
-            }
-            Err(e) => {
-                return Err(format!("Keyring load part {}: {}", idx, e));
-            }
+            Err(keyring::Error::NoEntry) => return Err(format!("Segment keyring manquant : {idx}")),
+            Err(e) => return Err(format!("Lecture keyring (partie {idx}) : {e}")),
         };
-
         refresh.push_str(&chunk);
     }
 
@@ -156,127 +123,98 @@ fn load_token_secure(tenant_id: &str, client_id: &str) -> Result<Option<String>,
 
 fn delete_token_secure(tenant_id: &str, client_id: &str) -> Result<(), String> {
     let base_account = token_account(tenant_id, client_id);
-
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Keyring init meta: {}", e))?;
+        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
 
     let count = match meta_entry.get_password() {
         Ok(v) => v.parse::<usize>().unwrap_or(0),
         Err(keyring::Error::NoEntry) => 0,
-        Err(e) => return Err(format!("Keyring read meta before delete: {}", e)),
+        Err(e) => return Err(format!("Lecture keyring avant suppression : {e}")),
     };
 
     for idx in 0..count {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Keyring init part {}: {}", idx, e))?;
-
+            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
         match entry.delete_credential() {
             Ok(_) | Err(keyring::Error::NoEntry) => {}
-            Err(e) => return Err(format!("Keyring delete part {}: {}", idx, e)),
+            Err(e) => return Err(format!("Suppression keyring (partie {idx}) : {e}")),
         }
     }
 
     match meta_entry.delete_credential() {
         Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(format!("Keyring delete meta: {}", e)),
+        Err(e) => Err(format!("Suppression keyring (meta) : {e}")),
     }
 }
 
 #[tauri::command]
-async fn load_config(
-    app: AppHandle,
-    state: State<'_, Arc<AppState>>,
-) -> Result<Option<AppConfig>, String> {
+async fn load_config(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<Option<AppConfig>, String> {
     let path = config_path(&app);
     if !path.exists() {
+        logger::info("Aucun fichier de configuration trouvé.");
         return Ok(None);
     }
 
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Read config: {}", e))?;
-    let cfg: AppConfig = serde_json::from_str(&text)
-        .map_err(|e| format!("Parse config: {}", e))?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("Lecture de la configuration : {e}"))?;
+    let cfg: AppConfig = serde_json::from_str(&text).map_err(|e| format!("Configuration invalide : {e}"))?;
 
     *state.tenant_id.lock().await = cfg.tenant_id.clone();
     *state.client_id.lock().await = cfg.client_id.clone();
 
-    eprintln!("load_config path: {:?}", path);
-    eprintln!("load_config exists: {}", path.exists());
-
     match load_token_secure(&cfg.tenant_id, &cfg.client_id) {
         Ok(Some(refresh)) => {
-            eprintln!("secure refresh token loaded");
             let http = reqwest::Client::new();
-
             match auth::refresh_access_token(&http, &cfg.tenant_id, &cfg.client_id, &refresh).await {
                 Ok(token) => {
                     *state.token.lock().await = Some(token);
+                    logger::info("Session restaurée depuis le refresh token.");
                 }
                 Err(e) => {
-                    eprintln!("refresh on startup failed: {}", e);
+                    logger::warn(&format!("Impossible de restaurer la session au démarrage : {e}"));
                 }
             }
         }
-        Ok(None) => {
-            eprintln!("no secure token found");
-        }
-        Err(e) => {
-            eprintln!("secure token load error: {}", e);
-        }
+        Ok(None) => logger::info("Aucun refresh token sécurisé disponible."),
+        Err(e) => logger::warn(&format!("Erreur lors du chargement du token sécurisé : {e}")),
     }
 
     Ok(Some(cfg))
 }
 
 #[tauri::command]
-async fn save_config(
-    app:    AppHandle,
-    config: AppConfig,
-    state:  State<'_, Arc<AppState>>,
-) -> Result<(), String> {
+async fn save_config(app: AppHandle, config: AppConfig, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let path = config_path(&app);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Create dir: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Création du dossier de configuration : {e}"))?;
     }
-    let text = serde_json::to_string_pretty(&config)
-        .map_err(|e| e.to_string())?;
-    std::fs::write(&path, text)
-        .map_err(|e| format!("Write config: {}", e))?;
+
+    let text = serde_json::to_string_pretty(&config).map_err(|e| format!("Sérialisation de la configuration : {e}"))?;
+    std::fs::write(&path, text).map_err(|e| format!("Ecriture de la configuration : {e}"))?;
 
     let old_tenant = state.tenant_id.lock().await.clone();
     let old_client = state.client_id.lock().await.clone();
-
-    if !old_tenant.is_empty() && !old_client.is_empty()
-        && (old_tenant != config.tenant_id || old_client != config.client_id)
-    {
+    if !old_tenant.is_empty() && !old_client.is_empty() && (old_tenant != config.tenant_id || old_client != config.client_id) {
         let _ = delete_token_secure(&old_tenant, &old_client);
         *state.token.lock().await = None;
     }
 
-    eprintln!("save_config path: {:?}", path);
-
     *state.tenant_id.lock().await = config.tenant_id;
     *state.client_id.lock().await = config.client_id;
+    logger::info("Configuration enregistrée.");
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-//  Auth - device code flow
-// ---------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceCodeResult {
-    pub user_code:        String,
+    pub user_code: String,
     pub verification_uri: String,
-    pub message:          String,
-    pub interval:         u64,
-    pub device_code:      String,
+    pub message: String,
+    pub interval: u64,
+    pub device_code: String,
 }
 
 #[tauri::command]
-async fn start_auth(
-    state: State<'_, Arc<AppState>>,
-) -> Result<DeviceCodeResult, String> {
+async fn start_auth(state: State<'_, Arc<AppState>>) -> Result<DeviceCodeResult, String> {
     let tenant_id = state.tenant_id.lock().await.clone();
     let client_id = state.client_id.lock().await.clone();
     if tenant_id.is_empty() || client_id.is_empty() {
@@ -284,22 +222,18 @@ async fn start_auth(
     }
     let http = reqwest::Client::new();
     let dc = auth::start_device_code(&http, &tenant_id, &client_id).await?;
+    logger::info("Démarrage du flux device code.");
     Ok(DeviceCodeResult {
-        user_code:        dc.user_code,
+        user_code: dc.user_code,
         verification_uri: dc.verification_uri,
-        message:          dc.message,
-        interval:         dc.interval,
-        device_code:      dc.device_code,
+        message: dc.message,
+        interval: dc.interval,
+        device_code: dc.device_code,
     })
 }
 
 #[tauri::command]
-async fn poll_auth(
-    device_code: String,
-    interval: u64,
-    app: AppHandle,
-    state: State<'_, Arc<AppState>>,
-) -> Result<bool, String> {
+async fn poll_auth(device_code: String, interval: u64, app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<bool, String> {
     let tenant_id = state.tenant_id.lock().await.clone();
     let client_id = state.client_id.lock().await.clone();
     let http = reqwest::Client::new();
@@ -309,15 +243,14 @@ async fn poll_auth(
         match auth::poll_token(&http, &tenant_id, &client_id, &device_code, interval).await {
             Ok(token_set) => {
                 *state_arc.token.lock().await = Some(token_set.clone());
-
                 if let Err(e) = save_token_secure(&tenant_id, &client_id, &token_set) {
-                    eprintln!("Keyring save failed: {}", e);
+                    logger::warn(&format!("Impossible de sauvegarder le refresh token : {e}"));
                 }
-
+                logger::info("Authentification Microsoft réussie.");
                 let _ = app.emit("auth-ok", ());
             }
             Err(e) => {
-                eprintln!("poll_token failed: {}", e);
+                logger::error(&format!("Echec de l'authentification Microsoft : {e}"));
                 let _ = app.emit("auth-error", e);
             }
         }
@@ -327,9 +260,7 @@ async fn poll_auth(
 }
 
 #[tauri::command]
-async fn get_auth_status(
-    state: State<'_, Arc<AppState>>,
-) -> Result<bool, String> {
+async fn get_auth_status(state: State<'_, Arc<AppState>>) -> Result<bool, String> {
     Ok(state.token.lock().await.is_some())
 }
 
@@ -337,109 +268,98 @@ async fn get_auth_status(
 async fn disconnect(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let tenant_id = state.tenant_id.lock().await.clone();
     let client_id = state.client_id.lock().await.clone();
-
     *state.token.lock().await = None;
-
     if !tenant_id.is_empty() && !client_id.is_empty() {
         delete_token_secure(&tenant_id, &client_id)?;
     }
-
+    logger::info("Déconnexion utilisateur.");
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-//  Data fetching
-// ---------------------------------------------------------------------------
 #[tauri::command]
-async fn fetch_data(
-    state: State<'_, Arc<AppState>>,
-) -> Result<graph::DashboardData, String> {
+async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardData, String> {
     let current = {
         let token_guard = state.token.lock().await;
-        token_guard
-            .as_ref()
-            .cloned()
-            .ok_or("Non authentifie. Veuillez vous connecter.")?
+        token_guard.as_ref().cloned().ok_or("Non authentifié. Veuillez vous connecter.")?
     };
 
     let tenant_id = state.tenant_id.lock().await.clone();
     let client_id = state.client_id.lock().await.clone();
 
     let usable_access_token = if current.is_expired() {
-        let refresh = current.refresh_token
-            .clone()
-            .ok_or("Session expiree et aucun refresh token disponible.")?;
-
+        let refresh = current.refresh_token.clone().ok_or("Session expirée et aucun refresh token disponible.")?;
         let http = reqwest::Client::new();
         let refreshed = auth::refresh_access_token(&http, &tenant_id, &client_id, &refresh).await?;
 
         if let Err(e) = save_token_secure(&tenant_id, &client_id, &refreshed) {
-            eprintln!("save_token_secure after refresh failed: {}", e);
+            logger::warn(&format!("Impossible de sauvegarder le token rafraîchi : {e}"));
         }
-
         {
             let mut token_guard = state.token.lock().await;
             *token_guard = Some(refreshed.clone());
         }
-
+        logger::info("Token d'accès rafraîchi.");
         refreshed.access_token
     } else {
         current.access_token
     };
 
     let http = reqwest::Client::new();
+    logger::info("Lancement de la collecte des données Graph.");
     Ok(graph::collect_all(&http, &usable_access_token).await)
 }
 
-// ---------------------------------------------------------------------------
-//  CSV export
-// ---------------------------------------------------------------------------
 #[tauri::command]
-async fn export_csv(
-    headers:  Vec<String>,
-    rows:     Vec<Vec<String>>,
-    filename: String,
-    app:      AppHandle,
-) -> Result<String, String> {
+async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: String, app: AppHandle) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    let path = app.dialog()
+    let path = app
+        .dialog()
         .file()
         .set_file_name(&filename)
         .add_filter("CSV", &["csv"])
         .blocking_save_file()
-        .ok_or("Export annule")?;
+        .ok_or("Export annulé.")?;
 
     let path_str = path.to_string();
     let mut csv = String::new();
     csv.push_str(&headers.join(";"));
     csv.push('\n');
     for row in &rows {
-        let escaped: Vec<String> = row.iter().map(|cell| {
-            if cell.contains(';') || cell.contains('"') || cell.contains('\n') {
-                format!("\"{}\"", cell.replace('"', "\"\""))
-            } else {
-                cell.clone()
-            }
-        }).collect();
+        let escaped: Vec<String> = row
+            .iter()
+            .map(|cell| {
+                if cell.contains(';') || cell.contains('"') || cell.contains('\n') {
+                    format!("\"{}\"", cell.replace('"', "\"\""))
+                } else {
+                    cell.clone()
+                }
+            })
+            .collect();
         csv.push_str(&escaped.join(";"));
         csv.push('\n');
     }
 
-    std::fs::write(&path_str, csv.as_bytes())
-        .map_err(|e| format!("Write CSV: {}", e))?;
-
+    std::fs::write(&path_str, csv.as_bytes()).map_err(|e| format!("Ecriture du CSV : {e}"))?;
+    logger::info(&format!("Export CSV réalisé : {path_str}"));
     Ok(path_str)
 }
 
-// ---------------------------------------------------------------------------
-//  Entry point
-// ---------------------------------------------------------------------------
+#[tauri::command]
+fn log_frontend_error(context: String, message: String) {
+    logger::error(&format!("Frontend - {context} : {message}"));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = Arc::new(AppState::default());
 
     tauri::Builder::default()
+        .setup(|app| {
+            let log_path = logger::init(app.handle())?;
+            logger::info(&format!("Fichier de log : {}", log_path.display()));
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
@@ -453,7 +373,8 @@ pub fn run() {
             disconnect,
             fetch_data,
             export_csv,
+            log_frontend_error,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running application");
+        .expect("Erreur lors du lancement de l'application");
 }

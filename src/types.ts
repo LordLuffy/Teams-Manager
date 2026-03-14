@@ -1,4 +1,4 @@
-// Types mirroring Rust structs with camelCase (serde rename_all = "camelCase")
+// Types exposés par le backend Rust vers le frontend React.
 
 export interface AppConfig {
   tenant_id: string;
@@ -48,6 +48,7 @@ export interface Subscription {
   consumed: number;
   available: number;
   status: string;
+  isFree: boolean;
 }
 
 export interface CallQueue {
