@@ -1,36 +1,94 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::process::{Command, Stdio};
+use std::sync::OnceLock;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+// Détection unique de l'exécutable PowerShell optimal.
+// PS7 (pwsh) est requis pour les DLL .NET 8+ du module MicrosoftTeams récent.
+static PS_EXE: OnceLock<String> = OnceLock::new();
+
+fn ps_exe() -> &'static str {
+    PS_EXE.get_or_init(|| {
+        let mut cmd = Command::new("pwsh");
+        cmd.args(["-NonInteractive", "-NoProfile", "-Command", "exit 0"]);
+        #[cfg(windows)]
+        cmd.creation_flags(0x0800_0000);
+        if cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+            "pwsh".to_string()
+        } else {
+            "powershell".to_string()
+        }
+    })
+}
 
 const V1: &str = "https://graph.microsoft.com/v1.0";
 const BETA: &str = "https://graph.microsoft.com/beta";
 
 pub fn friendly_sku(sku: &str) -> &str {
     match sku {
-        "MCOEV" => "Teams Phone Standard",
-        "MCOEV_VIRTUALUSER" => "Teams Phone Resource Account",
-        "MCOPSTN1" => "Teams Calling Plan National",
-        "MCOPSTN2" => "Teams Calling Plan International",
-        "MCOPSTN_5" => "Teams Calling Plan PAYG",
-        "MCOPSTNC" => "Teams Communication Credits",
-        "MCOCAP" => "Teams Shared Devices",
-        "SPE_E3" => "Microsoft 365 E3",
-        "SPE_E5" => "Microsoft 365 E5",
-        "SPB" => "Microsoft 365 Business Premium",
-        "O365_BUSINESS_ESSENTIALS" => "Microsoft 365 Business Basic",
-        "O365_BUSINESS_PREMIUM" => "Microsoft 365 Business Standard",
-        "ENTERPRISEPACK" => "Office 365 E3",
-        "ENTERPRISEPREMIUM" => "Office 365 E5",
-        "POWER_BI_PRO" => "Power BI Pro",
-        "POWER_BI_PREMIUM_PER_USER" => "Power BI Premium Per User",
-        "EMS" => "EMS E3",
-        "EMSPREMIUM" => "EMS E5",
-        "AAD_PREMIUM" => "Azure AD Premium P1",
-        "AAD_PREMIUM_P2" => "Azure AD Premium P2",
-        "INTUNE_A" => "Intune",
-        "PROJECTPREMIUM" => "Project Plan 5",
-        "PROJECTPROFESSIONAL" => "Project Plan 3",
-        "VISIOCLIENT" => "Visio Plan 2",
+        // Teams Phone
+        "MCOEV"                      => "Microsoft Teams Phone Standard",
+        "MCOEV_VIRTUALUSER"          => "Compte de ressources téléphoniques Microsoft Teams",
+        "PHONESYSTEM_VIRTUALUSER"    => "Compte de ressources téléphoniques Microsoft Teams",
+        "MCOPSTN1"                   => "Forfait d'appels nationaux Teams",
+        "MCOPSTN2"                   => "Forfait d'appels internationaux Teams",
+        "MCOPSTN_5"                  => "Forfait d'appels à la minute Teams",
+        "MCOPSTNC"                   => "Crédits de communication Teams",
+        "MCOCAP"                     => "Teams Shared Devices",
+        "MCOMEETADV"                 => "Microsoft 365 Audioconférence",
+        "MCOSTANDARD"                => "Skype Entreprise Online (plan 2)",
+        // Teams Rooms
+        "MEETING_ROOM"               => "Microsoft Teams Rooms Standard",
+        "MEETING_ROOM_PLUS"          => "Microsoft Teams Rooms Premium",
+        "TEAMS_ROOMS_FREE"           => "Microsoft Teams Rooms Basic",
+        // Exchange
+        "EXCHANGESTANDARD"           => "Exchange Online (plan 1)",
+        "EXCHANGEENTERPRISE"         => "Exchange Online (plan 2)",
+        "EXCHANGEESSENTIALS"         => "Exchange Online Essentials",
+        "EXCHANGE_S_ESSENTIALS"      => "Exchange Online Essentials",
+        "EXCHANGEDESKLESS"           => "Exchange Online Kiosk",
+        // Microsoft 365 / Office 365
+        "SPE_E3"                     => "Microsoft 365 E3",
+        "SPE_E5"                     => "Microsoft 365 E5",
+        "SPE_F1"                     => "Microsoft 365 F3",
+        "SPB"                        => "Microsoft 365 Business Premium",
+        "O365_BUSINESS_ESSENTIALS"   => "Microsoft 365 Business Basic",
+        "O365_BUSINESS_PREMIUM"      => "Microsoft 365 Business Standard",
+        "O365_BUSINESS"              => "Microsoft 365 Apps for Business",
+        "OFFICESUBSCRIPTION"         => "Microsoft 365 Apps for Enterprise",
+        "STANDARDPACK"               => "Office 365 E1",
+        "ENTERPRISEPACK"             => "Office 365 E3",
+        "ENTERPRISEPREMIUM"          => "Office 365 E5",
+        "DESKLESSPACK"               => "Office 365 F3",
+        "STANDARDWOFFPACK"           => "Office 365 E2",
+        // Power Platform
+        "POWER_BI_PRO"               => "Power BI Pro",
+        "POWER_BI_PREMIUM_PER_USER"  => "Power BI Premium par utilisateur",
+        "POWER_BI_STANDARD"          => "Power BI (gratuit)",
+        "FLOW_FREE"                  => "Microsoft Power Automate Free",
+        "POWERAPPS_DEV"              => "Microsoft Power Apps for Developer",
+        "POWERAPPS_VIRAL"            => "Microsoft Power Apps Plan 2 (essai)",
+        "MICROSOFT_FABRIC_FREE"      => "Microsoft Fabric (gratuit)",
+        // Security / Identity
+        "EMS"                        => "Enterprise Mobility + Security E3",
+        "EMSPREMIUM"                 => "Enterprise Mobility + Security E5",
+        "AAD_PREMIUM"                => "Microsoft Entra ID P1",
+        "AAD_PREMIUM_P2"             => "Microsoft Entra ID P2",
+        "INTUNE_A"                   => "Microsoft Intune Plan 1",
+        "INTUNE_A_VL"                => "Microsoft Intune Plan 1",
+        "ATP_ENTERPRISE"             => "Microsoft Defender for Office 365 (plan 1)",
+        "THREAT_INTELLIGENCE"        => "Microsoft Defender for Office 365 (plan 2)",
+        "RIGHTSMANAGEMENT"           => "Azure Information Protection P1",
+        // Project / Visio
+        "PROJECTPREMIUM"             => "Project Plan 5",
+        "PROJECTPROFESSIONAL"        => "Project Plan 3",
+        "PROJECT_PLAN1"              => "Project Plan 1",
+        "VISIOCLIENT"                => "Visio Plan 2",
+        "VISIOONLINE_PLAN1"          => "Visio Plan 1",
         other => other,
     }
 }
@@ -91,6 +149,7 @@ pub struct CallQueue {
     pub timeout_action: String,
     pub overflow_action: String,
     pub phone_number: String,
+    pub can_be_deleted: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -101,6 +160,7 @@ pub struct AutoAttendant {
     pub time_zone: String,
     pub phone_number: String,
     pub status: String,
+    pub can_be_deleted: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -230,7 +290,7 @@ fn is_free_subscription_sku(sku: &str) -> bool {
     let upper = sku.to_uppercase();
     upper.contains("FREE")
         || upper.contains("EXPLORATORY")
-        || matches!(upper.as_str(), "MCOEV_VIRTUALUSER" | "TEAMS_PHONE_RESOURCE_ACCOUNT")
+        || matches!(upper.as_str(), "MCOEV_VIRTUALUSER" | "PHONESYSTEM_VIRTUALUSER" | "TEAMS_PHONE_RESOURCE_ACCOUNT")
 }
 
 fn compute_subscription_status(available: i64, is_free: bool) -> String {
@@ -250,7 +310,7 @@ fn compute_subscription_status(available: i64, is_free: bool) -> String {
 fn detect_resource_account_type(display_name: &str, upn: &str, license_skus: &[String]) -> Option<String> {
     let name = lower(display_name);
     let upn_lower = lower(upn);
-    let has_virtual_license = license_skus.iter().any(|s| s == "MCOEV_VIRTUALUSER");
+    let has_virtual_license = license_skus.iter().any(|s| s == "MCOEV_VIRTUALUSER" || s == "PHONESYSTEM_VIRTUALUSER");
 
     let is_aa = name.contains("auto attendant") || name.starts_with("aa-") || name.starts_with("aa ") || upn_lower.contains("autoattendant");
     if is_aa {
@@ -288,6 +348,7 @@ fn merge_resource_based_queues(data: &mut DashboardData) {
                 timeout_action: "N/A".into(),
                 overflow_action: "N/A".into(),
                 phone_number: ra.phone_number.clone(),
+                can_be_deleted: String::new(),
             });
         }
     }
@@ -303,12 +364,367 @@ fn merge_resource_based_attendants(data: &mut DashboardData) {
                 time_zone: "N/A".into(),
                 phone_number: ra.phone_number.clone(),
                 status: "Actif".into(),
+                can_be_deleted: String::new(),
             });
         }
     }
 }
 
-pub async fn collect_all(client: &Client, token: &str) -> DashboardData {
+/// Complète les numéros de téléphone manquants pour les CQ/AA
+/// en croisant avec les comptes ressources déjà récupérés via Graph.
+fn enrich_from_resource_accounts(data: &mut DashboardData) {
+    let cq_phones: std::collections::HashMap<String, String> = data
+        .resource_accounts
+        .iter()
+        .filter(|r| r.account_type == "Call Queue" && !r.phone_number.is_empty() && r.phone_number != "-")
+        .map(|r| (lower(&r.display_name), r.phone_number.clone()))
+        .collect();
+
+    for cq in data.call_queues.iter_mut() {
+        if cq.phone_number.is_empty() || cq.phone_number == "-" {
+            if let Some(phone) = cq_phones.get(&lower(&cq.name)) {
+                cq.phone_number = phone.clone();
+            }
+        }
+    }
+
+    let aa_phones: std::collections::HashMap<String, String> = data
+        .resource_accounts
+        .iter()
+        .filter(|r| r.account_type == "Auto Attendant" && !r.phone_number.is_empty() && r.phone_number != "-")
+        .map(|r| (lower(&r.display_name), r.phone_number.clone()))
+        .collect();
+
+    for aa in data.auto_attendants.iter_mut() {
+        if aa.phone_number.is_empty() || aa.phone_number == "-" {
+            if let Some(phone) = aa_phones.get(&lower(&aa.name)) {
+                aa.phone_number = phone.clone();
+            }
+        }
+    }
+}
+
+/// Calcule le champ can_be_deleted pour toutes les files d'attente et standards automatiques.
+/// File d'attente : supprimable si aucun agent ET aucun numéro attribué.
+/// Standard automatique : supprimable si aucun numéro attribué.
+fn compute_deletability(data: &mut DashboardData) {
+    for cq in data.call_queues.iter_mut() {
+        let no_phone = cq.phone_number.is_empty() || cq.phone_number == "-";
+        cq.can_be_deleted = if no_phone && cq.agent_count == 0 {
+            "Oui".into()
+        } else {
+            "Non".into()
+        };
+    }
+    for aa in data.auto_attendants.iter_mut() {
+        let no_phone = aa.phone_number.is_empty() || aa.phone_number == "-";
+        aa.can_be_deleted = if no_phone { "Oui".into() } else { "Non".into() };
+    }
+}
+
+// Script PowerShell de vérification/installation du module MicrosoftTeams.
+// Sur PS5 : avertit que PS7 est requis.
+// Sur PS7 : importe le module (direct path si nécessaire), installe uniquement si absent.
+// Évite Install-Module -Force si le module est déjà présent (prévient les conflits OneDrive).
+const PS_CHECK_SCRIPT: &str = r#"
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference  = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Teams PS module (v5+) embarque des DLL .NET 8 incompatibles avec PS 5.1 (.NET Framework 4.x).
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    'ps5: PowerShell 7 (pwsh) est requis pour le module MicrosoftTeams. Installez-le depuis https://aka.ms/powershell'
+    exit
+}
+
+# Essai d'import standard
+$importOk = $false
+try {
+    Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+    $importOk = $true
+} catch { }
+
+if ($importOk) { 'ok'; exit }
+
+# Import échoué : chercher le module déjà installé et tenter un import par chemin direct
+# (évite de forcer une réinstallation si les fichiers sont verrouillés par OneDrive)
+$existing = Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue |
+            Sort-Object Version -Descending | Select-Object -First 1
+if ($existing) {
+    try {
+        $psd1 = Join-Path $existing.ModuleBase 'MicrosoftTeams.psd1'
+        Import-Module $psd1 -Force -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+        'ok'; exit
+    } catch { }
+}
+
+# Module absent : installation depuis PSGallery
+try {
+    $nuget = Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue
+    if (-not $nuget -or [version]$nuget.Version -lt [version]'2.8.5.201') {
+        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser -ErrorAction Stop | Out-Null
+    }
+    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue | Out-Null
+    Install-Module -Name MicrosoftTeams -AllowClobber -Scope CurrentUser -SkipPublisherCheck -ErrorAction Stop | Out-Null
+    Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+    'installed'
+} catch {
+    $errMsg = [string]$_.Exception.Message
+    if ($errMsg -match 'denied|OneDrive|Access to the path') {
+        'error: Accès refusé (OneDrive verrouille les fichiers du module). Installez manuellement : Install-Module MicrosoftTeams -Scope AllUsers'
+    } else {
+        'error: ' + $errMsg
+    }
+}
+"#;
+
+/// Exécute le script de vérification/installation du module MicrosoftTeams.
+/// Retourne "ok" si le module est déjà fonctionnel, "installed" après installation réussie,
+/// ou une erreur en cas d'échec.
+/// Fonction bloquante — à appeler via spawn_blocking ou std::thread::spawn.
+pub fn run_ps_module_install() -> Result<String, String> {
+    let temp_path = std::env::temp_dir().join("teams_check_module.ps1");
+    std::fs::write(&temp_path, PS_CHECK_SCRIPT.as_bytes())
+        .map_err(|e| format!("Impossible d'écrire le script de vérification : {e}"))?;
+    let script_path = temp_path.to_string_lossy().to_string();
+
+    let mut cmd = Command::new(ps_exe());
+    cmd.args([
+        "-NonInteractive", "-NoProfile", "-NoLogo",
+        "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass",
+        "-File", &script_path,
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000);
+
+    let output = cmd.output().map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("Lancement PowerShell impossible : {e}")
+    })?;
+    let _ = std::fs::remove_file(&temp_path);
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let line = raw.lines().last().unwrap_or("").trim().to_string();
+
+    match line.as_str() {
+        "ok" | "reinstalled" => Ok("ok".into()),
+        "installed"          => Ok("installed".into()),
+        other if other.starts_with("ps5:") => Err(other.trim_start_matches("ps5:").trim().to_string()),
+        other if other.starts_with("error:") => Err(other.trim_start_matches("error:").trim().to_string()),
+        other => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let hint = stderr.lines().last().unwrap_or("").trim().to_string();
+            Err(if hint.is_empty() { other.to_string() } else { hint })
+        }
+    }
+}
+
+/// Version pour le thread de démarrage : loggue le résultat sans retourner de valeur.
+pub fn check_ps_module() {
+    crate::logger::info(&format!("Exécutable PowerShell détecté : {}", ps_exe()));
+    match run_ps_module_install() {
+        Ok(s) if s == "installed" => crate::logger::info("Module PowerShell MicrosoftTeams installé avec succès."),
+        Ok(_)  => crate::logger::info("Module PowerShell MicrosoftTeams : OK."),
+        Err(e) => crate::logger::warn(&format!("check_ps_module : {e}")),
+    }
+}
+
+// Script PowerShell embarqué — utilise le module MicrosoftTeams.
+// Si TEAMS_TOKEN2 est fourni (token service Teams), il est passé en second pour accès complet.
+// Exécuté de façon invisible (CREATE_NO_WINDOW + -WindowStyle Hidden).
+const PS_SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+try {
+    # Import standard, avec fallback par chemin direct (cas OneDrive/PSModulePath non configuré)
+    $importOk = $false
+    try {
+        Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+        $importOk = $true
+    } catch { }
+    if (-not $importOk) {
+        $m = Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue |
+             Sort-Object Version -Descending | Select-Object -First 1
+        if ($m) {
+            Import-Module (Join-Path $m.ModuleBase 'MicrosoftTeams.psd1') -Force -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+        } else {
+            throw "Module MicrosoftTeams introuvable. Utilisez l'onglet CQ/AA pour l'installer."
+        }
+    }
+
+    # Utilise les deux tokens si disponibles (Graph + Teams service), sinon Graph seul
+    $tokens = @($env:TEAMS_TOKEN)
+    if ($env:TEAMS_TOKEN2 -and $env:TEAMS_TOKEN2 -ne '') {
+        $tokens = @($env:TEAMS_TOKEN, $env:TEAMS_TOKEN2)
+    }
+    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $tokens -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+
+    $cqError = ''
+    $cqs = @()
+    try {
+        $rawCqs = Get-CsCallQueue -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+        if ($rawCqs) {
+            $cqs = @($rawCqs | ForEach-Object {
+                $lu = if ($_.LineUri) { $_.LineUri -replace '^tel:', '' } else { '-' }
+                @{
+                    name           = [string]$_.Name
+                    language       = if ($_.Language) { [string]$_.Language } else { 'N/A' }
+                    routingMethod  = if ($_.RoutingMethod) { [string]$_.RoutingMethod } else { 'N/A' }
+                    agentCount     = [int]($_.Agents | Measure-Object).Count
+                    timeoutAction  = if ($_.TimeoutAction) { [string]$_.TimeoutAction } else { 'N/A' }
+                    overflowAction = if ($_.OverflowAction) { [string]$_.OverflowAction } else { 'N/A' }
+                    phoneNumber    = $lu
+                }
+            })
+        }
+    } catch { $cqError = [string]$_.Exception.Message }
+
+    $aaError = ''
+    $aas = @()
+    try {
+        $rawAas = Get-CsAutoAttendant -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
+        if ($rawAas) {
+            $aas = @($rawAas | ForEach-Object {
+                @{
+                    name       = [string]$_.Name
+                    language   = if ($_.LanguageId) { [string]$_.LanguageId } else { 'N/A' }
+                    timeZoneId = if ($_.TimeZoneId) { [string]$_.TimeZoneId } else { 'N/A' }
+                    phoneNumber = '-'
+                    status     = 'Actif'
+                }
+            })
+        }
+    } catch { $aaError = [string]$_.Exception.Message }
+
+    # Sérialisation manuelle pour éviter le problème PS5 avec les tableaux à 1 élément
+    $cqsJson = if ($cqs.Count -eq 0) { '[]' }
+               elseif ($cqs.Count -eq 1) { '[' + ($cqs[0] | ConvertTo-Json -Compress) + ']' }
+               else { ConvertTo-Json -InputObject $cqs -Depth 3 -Compress }
+
+    $aasJson = if ($aas.Count -eq 0) { '[]' }
+               elseif ($aas.Count -eq 1) { '[' + ($aas[0] | ConvertTo-Json -Compress) + ']' }
+               else { ConvertTo-Json -InputObject $aas -Depth 3 -Compress }
+
+    $cqErrJson = $cqError | ConvertTo-Json
+    $aaErrJson = $aaError | ConvertTo-Json
+    '{"success":true,"callQueues":' + $cqsJson + ',"autoAttendants":' + $aasJson + ',"cqError":' + $cqErrJson + ',"aaError":' + $aaErrJson + '}'
+} catch {
+    $errMsg = [string]$_.Exception.Message
+    $errJson = $errMsg | ConvertTo-Json
+    '{"success":false,"error":' + $errJson + '}'
+}
+"#;
+
+/// Exécute le module PowerShell MicrosoftTeams en tâche de fond (sans fenêtre)
+/// pour récupérer les files d'attente et standards automatiques.
+/// graph_token : token Graph (requis)
+/// teams_token : token service Teams 48ac35b8-... (optionnel, améliore l'accès aux cmdlets)
+/// Retourne (call_queues, auto_attendants, diagnostics) — les diagnostics sont des warnings.
+fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Option<&str>) -> Result<(Vec<CallQueue>, Vec<AutoAttendant>, Vec<String>), String> {
+    let temp_path = std::env::temp_dir().join("teams_analysis_fetch.ps1");
+    std::fs::write(&temp_path, PS_SCRIPT.as_bytes())
+        .map_err(|e| format!("Impossible d'écrire le script temporaire : {e}"))?;
+    let script_path = temp_path.to_string_lossy().to_string();
+
+    let mut cmd = Command::new(ps_exe());
+    cmd.args([
+        "-NonInteractive",
+        "-NoProfile",
+        "-NoLogo",
+        "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass",
+        "-File", &script_path,
+    ])
+    .env("TEAMS_TOKEN", graph_token)
+    .env("TEAMS_TOKEN2", teams_token.unwrap_or(""))
+    .env("TEAMS_TENANT", tenant_id)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+
+    let output = cmd.output().map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("Lancement PowerShell impossible : {e}")
+    })?;
+    let _ = std::fs::remove_file(&temp_path);
+
+    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // On prend la dernière ligne qui ressemble à du JSON
+    let json_str = raw
+        .lines()
+        .rev()
+        .find(|l| l.trim_start().starts_with('{'))
+        .ok_or_else(|| {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let hint = stderr.lines().last().unwrap_or("").trim().to_string();
+            if hint.is_empty() {
+                "Aucun JSON retourné par PowerShell (module MicrosoftTeams non installé ?)".to_string()
+            } else {
+                format!("Aucun JSON retourné par PowerShell : {hint}")
+            }
+        })?;
+
+    let json: Value = serde_json::from_str(json_str.trim())
+        .map_err(|e| format!("JSON PowerShell invalide : {e}"))?;
+
+    if !json.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Err(str_val(&json, "error"));
+    }
+
+    let mut diagnostics = Vec::new();
+    let cq_err = str_val(&json, "cqError");
+    let aa_err = str_val(&json, "aaError");
+    if !cq_err.is_empty() {
+        diagnostics.push(format!("Get-CsCallQueue : {cq_err}"));
+    }
+    if !aa_err.is_empty() {
+        diagnostics.push(format!("Get-CsAutoAttendant : {aa_err}"));
+    }
+
+    let mut cqs = Vec::new();
+    if let Some(arr) = json.get("callQueues").and_then(|v| v.as_array()) {
+        for q in arr {
+            cqs.push(CallQueue {
+                name:            str_val(q, "name"),
+                language:        str_val(q, "language"),
+                routing_method:  str_val(q, "routingMethod"),
+                agent_count:     q.get("agentCount").and_then(|v| v.as_i64()).unwrap_or(0),
+                timeout_action:  str_val(q, "timeoutAction"),
+                overflow_action: str_val(q, "overflowAction"),
+                phone_number:    str_val(q, "phoneNumber"),
+                can_be_deleted:  String::new(),
+            });
+        }
+    }
+
+    let mut aas = Vec::new();
+    if let Some(arr) = json.get("autoAttendants").and_then(|v| v.as_array()) {
+        for a in arr {
+            aas.push(AutoAttendant {
+                name:          str_val(a, "name"),
+                language:      str_val(a, "language"),
+                time_zone:     str_val(a, "timeZoneId"),
+                phone_number:  str_val(a, "phoneNumber"),
+                status:        str_val(a, "status"),
+                can_be_deleted: String::new(),
+            });
+        }
+    }
+
+    Ok((cqs, aas, diagnostics))
+}
+
+pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, teams_token: Option<String>) -> DashboardData {
     let mut data = DashboardData::default();
     let mut sku_id_map: std::collections::HashMap<String, String> = Default::default();
     let mut assigned_numbers_by_target: std::collections::HashMap<String, Vec<String>> = Default::default();
@@ -453,7 +869,7 @@ pub async fn collect_all(client: &Client, token: &str) -> DashboardData {
                         upn: upn.clone(),
                         account_type,
                         phone_number: phone_number_display,
-                        licensed: if lic_skus.iter().any(|s| s == "MCOEV_VIRTUALUSER") { "Oui".into() } else { "Non".into() },
+                        licensed: if lic_skus.iter().any(|s| s == "MCOEV_VIRTUALUSER" || s == "PHONESYSTEM_VIRTUALUSER") { "Oui".into() } else { "Non".into() },
                     });
                 }
 
@@ -475,40 +891,38 @@ pub async fn collect_all(client: &Client, token: &str) -> DashboardData {
         }
     }
 
-    match fetch_pages(client, token, &format!("{BETA}/solutions/businessApplications/callQueues")).await {
-        Err(e) => data.warnings.push(format!("Détails des files d'attente indisponibles via Microsoft Graph ({e}). Affichage à partir des comptes ressources détectés.")),
-        Ok(cqs) => {
-            for q in cqs {
-                data.call_queues.push(CallQueue {
-                    name: str_val(&q, "displayName"),
-                    language: str_val(&q, "languageId"),
-                    routing_method: str_val(&q, "routingMethod"),
-                    agent_count: i64_val(&q, "agentCount"),
-                    timeout_action: str_val(&q, "timeoutAction"),
-                    overflow_action: str_val(&q, "overflowAction"),
-                    phone_number: q.get("phoneNumbers").and_then(|p| p.as_array()).and_then(|arr| arr.first()).and_then(|v| v.as_str()).unwrap_or("-").to_string(),
-                });
+    // Récupération des files d'attente et standards automatiques via PowerShell MicrosoftTeams.
+    // Utilise le token Graph + token service Teams si disponible (meilleur accès aux cmdlets).
+    // L'exécution est invisible (pas de fenêtre PowerShell).
+    {
+        let tok = token.to_string();
+        let tid = tenant_id.to_string();
+        let teams_tok = teams_token.clone();
+        match tokio::task::spawn_blocking(move || {
+            run_powershell_for_teams(&tok, &tid, teams_tok.as_deref())
+        }).await {
+            Ok(Ok((cqs, aas, diags))) => {
+                data.call_queues = cqs;
+                data.auto_attendants = aas;
+                for d in diags {
+                    data.warnings.push(format!("PowerShell Teams — {d}"));
+                }
             }
-        }
-    }
-
-    match fetch_pages(client, token, &format!("{BETA}/solutions/businessApplications/autoAttendants")).await {
-        Err(e) => data.warnings.push(format!("Détails des standards automatiques indisponibles via Microsoft Graph ({e}). Affichage à partir des comptes ressources détectés.")),
-        Ok(aas) => {
-            for a in aas {
-                data.auto_attendants.push(AutoAttendant {
-                    name: str_val(&a, "displayName"),
-                    language: str_val(&a, "languageId"),
-                    time_zone: str_val(&a, "timeZoneId"),
-                    phone_number: a.get("phoneNumbers").and_then(|p| p.as_array()).and_then(|arr| arr.first()).and_then(|v| v.as_str()).unwrap_or("-").to_string(),
-                    status: "Actif".into(),
-                });
+            Ok(Err(e)) => {
+                data.warnings.push(format!(
+                    "Module PowerShell MicrosoftTeams indisponible ({e}). Affichage à partir des comptes ressources détectés."
+                ));
+            }
+            Err(e) => {
+                data.warnings.push(format!("Erreur tâche PowerShell : {e}"));
             }
         }
     }
 
     merge_resource_based_queues(&mut data);
     merge_resource_based_attendants(&mut data);
+    enrich_from_resource_accounts(&mut data);
+    compute_deletability(&mut data);
 
     let known_resource_numbers: std::collections::HashSet<String> = data
         .resource_accounts

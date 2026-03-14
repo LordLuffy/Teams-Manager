@@ -14,6 +14,19 @@ const columns: Column<AutoAttendant>[] = [
       <span className="badge badge-success">{String(v)}</span>
     ),
   },
+  {
+    key: "canBeDeleted", label: "Supprimable ?",
+    render: (v) => {
+      const val = String(v);
+      if (val === "Oui") {
+        return <span className="badge badge-danger">Oui</span>;
+      }
+      if (val === "Non") {
+        return <span className="badge badge-success">Non</span>;
+      }
+      return <span className="badge">{val || "—"}</span>;
+    },
+  },
 ];
 
 export default function AutoAttendantsTab({ data }: Props) {

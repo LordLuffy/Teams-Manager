@@ -305,8 +305,31 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
     };
 
     let http = reqwest::Client::new();
+
+    // Lecture du refresh token courant (potentiellement mis à jour si on vient de rafraîchir).
+    let current_refresh = state.token.lock().await
+        .as_ref()
+        .and_then(|t| t.refresh_token.clone());
+
+    // Tentative d'obtention d'un token Teams service (48ac35b8-...) via le refresh token.
+    // Nécessite que l'app registration ait la permission Teams service — échoue silencieusement sinon.
+    let teams_token = if let Some(rt) = current_refresh {
+        match auth::get_teams_service_token(&http, &tenant_id, &client_id, &rt).await {
+            Ok(t) => {
+                logger::info("Token service Teams obtenu avec succès.");
+                Some(t)
+            }
+            Err(e) => {
+                logger::warn(&format!("Token service Teams indisponible (app sans permission Teams ?) : {e}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     logger::info("Lancement de la collecte des données Graph.");
-    Ok(graph::collect_all(&http, &usable_access_token).await)
+    Ok(graph::collect_all(&http, &usable_access_token, &tenant_id, teams_token).await)
 }
 
 #[tauri::command]
@@ -346,6 +369,16 @@ async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: Stri
 }
 
 #[tauri::command]
+async fn install_ps_module() -> Result<String, String> {
+    logger::info("Installation du module PowerShell MicrosoftTeams demandée par l'utilisateur.");
+    let result = tokio::task::spawn_blocking(graph::run_ps_module_install)
+        .await
+        .map_err(|e| format!("Erreur tâche : {e}"))??;
+    logger::info(&format!("install_ps_module : {result}"));
+    Ok(result)
+}
+
+#[tauri::command]
 fn log_frontend_error(context: String, message: String) {
     logger::error(&format!("Frontend - {context} : {message}"));
 }
@@ -358,6 +391,17 @@ pub fn run() {
         .setup(|app| {
             let log_path = logger::init(app.handle())?;
             logger::info(&format!("Fichier de log : {}", log_path.display()));
+
+            // Windows : vérification et installation silencieuse du module PowerShell MicrosoftTeams.
+            // Tourne en arrière-plan pour ne pas bloquer le démarrage de l'interface.
+            #[cfg(windows)]
+            {
+                logger::info("Lancement de la vérification du module PowerShell MicrosoftTeams en arrière-plan...");
+                std::thread::spawn(|| {
+                    graph::check_ps_module();
+                });
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
@@ -373,6 +417,7 @@ pub fn run() {
             disconnect,
             fetch_data,
             export_csv,
+            install_ps_module,
             log_frontend_error,
         ])
         .run(tauri::generate_context!())

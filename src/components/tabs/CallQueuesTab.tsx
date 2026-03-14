@@ -11,6 +11,19 @@ const columns: Column<CallQueue>[] = [
   { key: "timeoutAction",  label: "Timeout" },
   { key: "overflowAction", label: "Overflow" },
   { key: "phoneNumber",    label: "Numéro" },
+  {
+    key: "canBeDeleted", label: "Supprimable ?",
+    render: (v) => {
+      const val = String(v);
+      if (val === "Oui") {
+        return <span className="badge badge-danger">Oui</span>;
+      }
+      if (val === "Non") {
+        return <span className="badge badge-success">Non</span>;
+      }
+      return <span className="badge">{val || "—"}</span>;
+    },
+  },
 ];
 
 export default function CallQueuesTab({ data }: Props) {

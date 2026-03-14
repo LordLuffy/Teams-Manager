@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { DashboardData, TabId } from "../types";
 import PhoneUsersTab from "./tabs/PhoneUsersTab";
 import FreeNumbersTab from "./tabs/FreeNumbersTab";
@@ -34,8 +36,41 @@ const SECTIONS = [
   { id: "ressources", label: "RESSOURCES" },
 ];
 
+type PsState = "idle" | "installing" | "done" | "error";
+
+const PS_MODULE_MARKER = "Module PowerShell MicrosoftTeams indisponible";
+
 export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onDisconnect }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("phoneUsers");
+  const [psState, setPsState] = useState<PsState>("idle");
+  const [psMsg, setPsMsg] = useState("");
+
+  const psWarning = data?.warnings.find(w => w.includes(PS_MODULE_MARKER));
+  const otherWarnings = data?.warnings.filter(w => !w.includes(PS_MODULE_MARKER)) ?? [];
+
+  const ps7Url = "https://aka.ms/powershell";
+  const needsPs7 = psState === "error" && psMsg.includes("PowerShell 7");
+
+  async function handleInstallModule() {
+    setPsState("installing");
+    setPsMsg("");
+    try {
+      const result = await invoke<string>("install_ps_module");
+      setPsState("done");
+      setPsMsg(
+        result === "installed"
+          ? "Module installé avec succès. Cliquez sur Actualiser pour recharger les données."
+          : "Module déjà fonctionnel. Cliquez sur Actualiser pour recharger les données."
+      );
+    } catch (e) {
+      setPsState("error");
+      setPsMsg(String(e));
+    }
+  }
+
+  const showPsBanner =
+    (activeTab === "callQueues" || activeTab === "autoAttendants") &&
+    (psWarning || psState === "installing" || psState === "done" || psState === "error");
 
   const nav: NavItem[] = [
     { id: "directoryUsers", label: "Tous les utilisateurs", section: "telephonie", icon: <PhoneIcon />, count: () => data?.directoryUsers.length ?? 0 },
@@ -117,11 +152,12 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)", flexShrink: 0, gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ color: "var(--text-1)", fontSize: 15, fontWeight: 600, margin: 0 }}>{tabLabel}</h2>
-            {(runtimeError || (data && (data.errors.length > 0 || data.warnings.length > 0))) && (
+            {(runtimeError || (data && (data.errors.length > 0 || otherWarnings.length > 0 || psWarning))) && (
               <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
                 {runtimeError && <span className="badge badge-danger" title={runtimeError}>Erreur UI : {runtimeError.slice(0, 80)}{runtimeError.length > 80 ? "…" : ""}</span>}
                 {data?.errors.map((e, i) => <span key={`e${i}`} className="badge badge-danger" title={e}>Erreur : {e.slice(0, 60)}{e.length > 60 ? "…" : ""}</span>)}
-                {data?.warnings.map((w, i) => <span key={`w${i}`} className="badge badge-warning" title={w}>{w.slice(0, 80)}{w.length > 80 ? "…" : ""}</span>)}
+                {otherWarnings.map((w, i) => <span key={`w${i}`} className="badge badge-warning" title={w}>{w.slice(0, 80)}{w.length > 80 ? "…" : ""}</span>)}
+                {psWarning && psState !== "done" && <span className="badge badge-warning" title={psWarning}>Module PS Teams : voir onglet CQ/AA</span>}
               </div>
             )}
           </div>
@@ -131,7 +167,62 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
           </div>
         </header>
 
-        <main style={{ flex: 1, overflowY: "auto", padding: 20 }} className="fade-in">{renderTab()}</main>
+        <main style={{ flex: 1, overflowY: "auto", padding: 20 }} className="fade-in">
+          {showPsBanner && (
+            <div style={{ marginBottom: 16, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ color: "var(--accent-warn, #f59e0b)", flexShrink: 0, marginTop: 1 }}><AlertIcon /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "var(--text-1)" }}>
+                  Module PowerShell MicrosoftTeams requis
+                </p>
+                {psState === "idle" && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
+                    Ce module est nécessaire pour récupérer les données de cet onglet via PowerShell.
+                    {psWarning && <> L'erreur détectée est probablement une dépendance manquante ou cassée.</>}
+                  </p>
+                )}
+                {psState === "installing" && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
+                    Installation en cours… (cela peut prendre 1 à 3 minutes)
+                  </p>
+                )}
+                {psState === "done" && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-2)" }}>{psMsg}</p>
+                )}
+                {psState === "error" && !needsPs7 && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-danger, #ef4444)" }}>{psMsg}</p>
+                )}
+                {psState === "error" && needsPs7 && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-danger, #ef4444)" }}>
+                    PowerShell 7 est requis pour le module MicrosoftTeams (DLL incompatible avec PS 5.1).
+                    Installez-le gratuitement depuis Microsoft.
+                  </p>
+                )}
+              </div>
+              {(psState === "idle" || (psState === "error" && !needsPs7)) && (
+                <button className="btn btn-primary" style={{ flexShrink: 0, fontSize: 12 }} onClick={handleInstallModule}>
+                  Installer le module
+                </button>
+              )}
+              {psState === "error" && needsPs7 && (
+                <button className="btn btn-primary" style={{ flexShrink: 0, fontSize: 12 }} onClick={() => openUrl(ps7Url)}>
+                  Télécharger PowerShell 7
+                </button>
+              )}
+              {psState === "installing" && (
+                <button className="btn btn-primary" style={{ flexShrink: 0, fontSize: 12 }} disabled>
+                  <SpinIcon /> Installation…
+                </button>
+              )}
+              {psState === "done" && (
+                <button className="btn btn-primary" style={{ flexShrink: 0, fontSize: 12 }} onClick={onRefresh}>
+                  <RefreshIcon /> Actualiser
+                </button>
+              )}
+            </div>
+          )}
+          {renderTab()}
+        </main>
       </div>
     </div>
   );

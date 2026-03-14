@@ -94,6 +94,29 @@ pub async fn poll_token(client: &Client, tenant_id: &str, client_id: &str, devic
     }
 }
 
+/// Tente d'obtenir un token pour le service Teams admin (48ac35b8-...).
+/// Retourne Ok(token) si l'app registration a la permission, Err sinon (silencieux).
+pub async fn get_teams_service_token(client: &Client, tenant_id: &str, client_id: &str, refresh_token: &str) -> Result<String, String> {
+    let url = format!("https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token");
+    let params = [
+        ("grant_type", "refresh_token"),
+        ("client_id", client_id),
+        ("refresh_token", refresh_token),
+        ("scope", "48ac35b8-9aa8-4d74-927d-1f4a14a0b239/.default"),
+    ];
+
+    let resp = client.post(&url).form(&params).send().await.map_err(|e| e.to_string())?;
+    let body = resp.text().await.unwrap_or_default();
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+
+    if let Some(token) = json.get("access_token").and_then(|v| v.as_str()) {
+        Ok(token.to_string())
+    } else {
+        let desc = json.get("error_description").and_then(|v| v.as_str()).unwrap_or(&body);
+        Err(desc.to_string())
+    }
+}
+
 pub async fn refresh_access_token(client: &Client, tenant_id: &str, client_id: &str, refresh_token: &str) -> Result<TokenSet, String> {
     let url = format!("https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token");
     let params = [

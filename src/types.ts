@@ -59,6 +59,7 @@ export interface CallQueue {
   timeoutAction: string;
   overflowAction: string;
   phoneNumber: string;
+  canBeDeleted: string;
 }
 
 export interface AutoAttendant {
@@ -67,6 +68,7 @@ export interface AutoAttendant {
   timeZone: string;
   phoneNumber: string;
   status: string;
+  canBeDeleted: string;
 }
 
 export interface ResourceAccount {
