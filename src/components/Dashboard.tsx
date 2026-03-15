@@ -19,6 +19,7 @@ interface Props {
   runtimeError: string | null;
   onRefresh: () => void;
   onDisconnect: () => void;
+  onSetup: () => void;
 }
 
 interface NavItem {
@@ -40,7 +41,7 @@ type PsState = "idle" | "installing" | "done" | "error";
 
 const PS_MODULE_MARKER = "Module PowerShell MicrosoftTeams indisponible";
 
-export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onDisconnect }: Props) {
+export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onDisconnect, onSetup }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("phoneUsers");
   const [psState, setPsState] = useState<PsState>("idle");
   const [psMsg, setPsMsg] = useState("");
@@ -53,6 +54,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
 
   const ps7Url = "https://aka.ms/powershell";
   const needsPs7 = psState === "error" && psMsg.includes("PowerShell 7");
+  const needsSecret = (psWarning ?? "").includes("Client Secret") || (psState === "error" && psMsg.includes("Client Secret"));
 
   // Charger les infos PS dès que le banner est visible pour les onglets CQ/AA
   async function loadPsInfo() {
@@ -190,11 +192,28 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "var(--text-1)" }}>
                   Module PowerShell MicrosoftTeams requis
                 </p>
-                {psState === "idle" && (
+                {psState === "idle" && !needsSecret && (
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
                     Ce module est nécessaire pour récupérer les données de cet onglet via PowerShell.
                     {psWarning && <> L'erreur détectée est probablement une dépendance manquante ou cassée.</>}
                   </p>
+                )}
+                {needsSecret && (
+                  <div style={{ margin: "6px 0 0", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, padding: "10px 12px" }}>
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", fontWeight: 600 }}>
+                      Un Client Secret Azure est requis pour les onglets CQ/AA
+                    </p>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
+                      Le module PowerShell MicrosoftTeams v7.x ne supporte plus l'authentification déléguée non-interactive.
+                      Ajoutez un Client Secret dans la configuration de l'application (roue dentée).
+                    </p>
+                    <ol style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-3)", paddingLeft: 16, lineHeight: 1.7 }}>
+                      <li>portal.azure.com → App registrations → votre app → <strong>Certificates &amp; secrets</strong> → New client secret</li>
+                      <li>Ajoutez la permission Application <code>Organization.Read.All</code> (Microsoft Graph)</li>
+                      <li>Assignez le rôle <strong>Teams Administrator</strong> à l'application dans Microsoft Entra ID</li>
+                      <li>Accordez le consentement administrateur, puis collez le secret dans <strong>Configuration</strong></li>
+                    </ol>
+                  </div>
                 )}
                 {/* Diagnostics PS : version et cmdlet errors */}
                 {psDiagWarnings.map((w, i) => (
@@ -227,7 +246,12 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                   onClick={() => invoke("open_log_file").catch(() => {})}>
                   <LogIcon /> Voir les logs
                 </button>
-                {(psState === "idle" || (psState === "error" && !needsPs7)) && (
+                {needsSecret && (
+                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onSetup}>
+                    <SettingsIcon /> Configuration
+                  </button>
+                )}
+                {!needsSecret && (psState === "idle" || (psState === "error" && !needsPs7)) && (
                   <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleInstallModule}>
                     Installer le module
                   </button>
@@ -271,3 +295,4 @@ function LogoutIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" f
 function RefreshIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>; }
 function LogIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>; }
 function SpinIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>; }
+function SettingsIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }

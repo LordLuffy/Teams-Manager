@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 export interface Column<T> {
   key: string;
   label: string;
+  tooltip?: string;
   render?: (val: unknown, row: T) => React.ReactNode;
 }
 
@@ -146,8 +147,17 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
                 <tr>
                   {columns.map((col) => (
                     <th key={col.key} onClick={() => handleSort(col.key)}>
-                      {col.label}
-                      {sortKey === col.key && <span style={{ marginLeft: 4, opacity: 0.7 }}>{sortAsc ? "▲" : "▼"}</span>}
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {col.label}
+                        {col.tooltip && (
+                          <span
+                            title={col.tooltip}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", background: "rgba(96,165,250,0.18)", color: "var(--info)", fontSize: 9, fontWeight: 700, flexShrink: 0, cursor: "help", lineHeight: 1 }}
+                          >ⓘ</span>
+                        )}
+                        {sortKey === col.key && <span style={{ opacity: 0.7 }}>{sortAsc ? "▲" : "▼"}</span>}
+                      </span>
                     </th>
                   ))}
                 </tr>

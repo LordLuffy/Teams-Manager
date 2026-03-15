@@ -89,6 +89,7 @@ export default function App() {
       runtimeError={runtimeError}
       onRefresh={handleRefresh}
       onDisconnect={handleDisconnect}
+      onSetup={() => setScreen("setup")}
     />
   );
 }

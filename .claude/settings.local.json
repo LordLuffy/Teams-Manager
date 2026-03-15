@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cargo check:*)",
       "Bash(npx tsc:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

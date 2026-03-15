@@ -14,8 +14,18 @@ const columns: Column<DirectoryUser>[] = [
   { key: "displayName", label: "Nom" },
   { key: "upn", label: "UPN" },
   { key: "phoneNumber", label: "Numéro détecté" },
-  { key: "hasPhoneLicense", label: "Licence phone", render: badgeOuiNon },
-  { key: "accountEnabled", label: "Compte actif", render: badgeOuiNon },
+  {
+    key: "hasPhoneLicense",
+    label: "Licence phone",
+    tooltip: "L'utilisateur possède une licence incluant Microsoft Teams Phone Standard (ou équivalente), nécessaire pour la téléphonie Teams (appels entrants et sortants via PSTN).",
+    render: badgeOuiNon,
+  },
+  {
+    key: "accountEnabled",
+    label: "Compte actif",
+    tooltip: "Indique si le compte Microsoft 365 de l'utilisateur est activé dans Azure Active Directory. Un compte inactif ne peut plus se connecter aux services Microsoft.",
+    render: badgeOuiNon,
+  },
   { key: "licenses", label: "Licences" },
 ];
 

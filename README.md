@@ -106,14 +106,14 @@ Stocké dans le répertoire de config de l'application :
 
 ### PowerShell MicrosoftTeams (Windows uniquement)
 
-Les onglets **Files d'attente** et **Auto Attendants** utilisent le module PowerShell `MicrosoftTeams` car les endpoints Graph correspondants ne sont pas disponibles sur tous les tenants.
+Les onglets **Files d'attente** et **Standards automatiques** utilisent le module PowerShell `MicrosoftTeams` car les endpoints Graph correspondants ne sont pas disponibles sur tous les tenants.
 
 | Cmdlet | Description |
 |--------|-------------|
 | `Get-CsCallQueue` | Files d'attente Teams |
 | `Get-CsAutoAttendant` | Standards automatiques |
 
-L'authentification réutilise le token Graph déjà obtenu (`Connect-MicrosoftTeams -AccessTokens`). Si un token de service Teams est disponible (permission `48ac35b8-9aa8-4d74-927d-1f4a14a0b239`), il est passé en second argument pour un accès complet.
+**Authentification** : le module PowerShell MicrosoftTeams v7.x ne supporte plus l'authentification déléguée non-interactive. L'application utilise le flux `client_credentials` (app-only) qui nécessite un **Client Secret** Azure AD. Voir la section 5 pour la configuration complète.
 
 ---
 
@@ -131,26 +131,34 @@ Nom du fichier : `teams-manager.log`
 
 ### Permissions Microsoft Graph attendues
 
-- `User.Read.All`
-- `Directory.Read.All`
-- `Organization.Read.All`
-- `LicenseAssignment.Read.All`
-- `NumberAssignment.Read.All` *(pour les numéros libres — endpoint beta)*
+| Permission | Type | Usage |
+|-----------|------|-------|
+| `User.Read.All` | Déléguée | Utilisateurs et licences |
+| `Directory.Read.All` | Déléguée | Annuaire Azure AD |
+| `Organization.Read.All` | Déléguée + **Application** | Infos tenant |
+| `LicenseAssignment.Read.All` | Déléguée | Assignations de licences |
+| `NumberAssignment.Read.All` | Déléguée | Numéros PSTN (endpoint beta) |
 
-### Paramétrage dans l'application
+### Paramétrage de base (authentification utilisateur — Graph API)
 
-1. Allez sur **portal.azure.com** → Microsoft Entra ID → App registrations → **New registration**
-2. Nom : `Teams Manager`, type de compte : *Accounts in this organizational directory only*
-3. Plateforme : **Public client/native** (mobile & desktop), URI de redirection : `https://login.microsoftonline.com/common/oauth2/nativeclient`
-4. Dans **Authentication** → activez **Allow public client flows** (device code flow)
-5. Dans **API permissions** → Add a permission → Microsoft Graph → **Delegated** :
-   - `User.Read.All`
-   - `Directory.Read.All`
-   - `Organization.Read.All`
-   - `LicenseAssignment.Read.All`
-   - `NumberAssignment.Read.All`
+1. **portal.azure.com** → Microsoft Entra ID → App registrations → **New registration**
+2. Nom : `Teams Manager`, type : *Accounts in this organizational directory only*
+3. Plateforme : **Public client/native**, URI de redirection : `https://login.microsoftonline.com/common/oauth2/nativeclient`
+4. **Authentication** → activez **Allow public client flows** (device code flow)
+5. **API permissions** → Microsoft Graph → **Delegated** : `User.Read.All`, `Directory.Read.All`, `Organization.Read.All`, `LicenseAssignment.Read.All`, `NumberAssignment.Read.All`
 6. Cliquez **Grant admin consent**
 7. Notez le **Tenant ID** et le **Application (client) ID**
+
+### Paramétrage avancé (onglets Files d'attente & Standards automatiques)
+
+Les cmdlets PowerShell `Get-CsCallQueue` / `Get-CsAutoAttendant` nécessitent une authentification application (non-interactive) avec un **Client Secret**.
+
+1. Dans votre App Registration → **Certificates & secrets** → New client secret → copiez la valeur
+2. **API permissions** → Microsoft Graph → **Application** → ajoutez `Organization.Read.All` → Grant admin consent
+3. **Microsoft Entra ID** (niveau tenant, pas l'App Registration) → **Rôles et administrateurs** → cherchez **Teams Administrator** → **Add assignments** → ajoutez votre application
+4. Dans l'application Teams Manager → écran **Configuration** → collez le Client Secret dans le champ prévu
+
+> **Important** : L'assignation du rôle Teams Administrator se fait dans **Microsoft Entra ID → Rôles et administrateurs** (niveau tenant), et non dans les Rôles de l'App Registration. Aucune licence Entra ID Premium n'est requise pour assigner un rôle administrateur intégré.
 
 ---
 
@@ -188,11 +196,19 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 5. **Actualiser** pour rafraîchir les données
 6. **Exporter CSV** dans chaque onglet pour exporter les données filtrées
 
-### Résolution des problèmes — onglets Files d'attente / Auto Attendants
+### Résolution des problèmes — onglets Files d'attente / Standards automatiques
 
 | Symptôme | Cause probable | Solution |
 |----------|----------------|----------|
 | "PowerShell 7 requis" | `pwsh.exe` absent | Installer [PowerShell 7](https://aka.ms/powershell) |
-| "Accès refusé (OneDrive)" | OneDrive verrouille les fichiers du module | `Install-Module MicrosoftTeams -Scope AllUsers` (admin PS7) |
-| 0 résultats sans erreur | `Get-CsCallQueue` retourne vide | Vérifier permissions Teams admin du compte |
-| Warning `Get-CsCallQueue : Insufficient privileges` | Token sans accès Teams service | Ajouter permission `48ac35b8-9aa8-4d74-927d-1f4a14a0b239` à l'app Azure |
+| "Client Secret requis" | Aucun secret configuré | Voir section 5 — Paramétrage avancé |
+| `Authorization_RequestDenied` | Permission Application `Organization.Read.All` manquante | Ajouter la permission Application dans Azure + Grant consent |
+| `Authorization_RequestDenied` | Rôle Teams Administrator non assigné à l'application | Assigner le rôle dans **Microsoft Entra ID → Rôles et administrateurs** |
+| 0 résultats sans erreur | `Get-CsCallQueue` retourne vide | Vérifier que le compte a des droits Teams admin |
+| Bannière orange persistante après configuration | Secret incorrect ou permissions non consenties | Vérifier les permissions et le consentement admin dans Azure |
+
+### Journalisation
+
+Un bouton **Voir les logs** est disponible dans la bannière de statut des onglets CQ/AA. Les logs sont accessibles manuellement dans :
+
+- `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`

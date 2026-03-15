@@ -15,12 +15,15 @@ pub struct AppState {
     pub token: Mutex<Option<auth::TokenSet>>,
     pub tenant_id: Mutex<String>,
     pub client_id: Mutex<String>,
+    pub client_secret: Mutex<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
     pub tenant_id: String,
     pub client_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
 }
 
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
@@ -160,6 +163,7 @@ async fn load_config(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<
 
     *state.tenant_id.lock().await = cfg.tenant_id.clone();
     *state.client_id.lock().await = cfg.client_id.clone();
+    *state.client_secret.lock().await = cfg.client_secret.clone().unwrap_or_default();
 
     match load_token_secure(&cfg.tenant_id, &cfg.client_id) {
         Ok(Some(refresh)) => {
@@ -200,6 +204,7 @@ async fn save_config(app: AppHandle, config: AppConfig, state: State<'_, Arc<App
 
     *state.tenant_id.lock().await = config.tenant_id;
     *state.client_id.lock().await = config.client_id;
+    *state.client_secret.lock().await = config.client_secret.clone().unwrap_or_default();
     logger::info("Configuration enregistrée.");
     Ok(())
 }
@@ -306,6 +311,11 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
 
     let http = reqwest::Client::new();
 
+    let client_secret = {
+        let s = state.client_secret.lock().await.clone();
+        if s.is_empty() { None } else { Some(s) }
+    };
+
     // Lecture du refresh token courant (potentiellement mis à jour si on vient de rafraîchir).
     let current_refresh = state.token.lock().await
         .as_ref()
@@ -329,7 +339,7 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
     };
 
     logger::info("Lancement de la collecte des données Graph.");
-    Ok(graph::collect_all(&http, &usable_access_token, &tenant_id, teams_token).await)
+    Ok(graph::collect_all(&http, &usable_access_token, &tenant_id, &client_id, teams_token, client_secret).await)
 }
 
 #[tauri::command]

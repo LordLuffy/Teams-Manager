@@ -420,7 +420,7 @@ fn enrich_from_resource_accounts(data: &mut DashboardData) {
 
 /// Calcule le champ can_be_deleted pour toutes les files d'attente et standards automatiques.
 /// File d'attente : supprimable si aucun agent ET aucun numéro attribué.
-/// Standard automatique : supprimable si aucun numéro attribué.
+/// Standard automatique : supprimable si aucun numéro attribué ET aucun compte ressource lié.
 fn compute_deletability(data: &mut DashboardData) {
     for cq in data.call_queues.iter_mut() {
         let no_phone = cq.phone_number.is_empty() || cq.phone_number == "-";
@@ -430,9 +430,22 @@ fn compute_deletability(data: &mut DashboardData) {
             "Non".into()
         };
     }
+    // Noms des comptes ressources de type "Auto Attendant" (en minuscules pour comparaison)
+    let ra_aa_names: std::collections::HashSet<String> = data
+        .resource_accounts
+        .iter()
+        .filter(|r| r.account_type == "Auto Attendant")
+        .map(|r| lower(&r.display_name))
+        .collect();
+
     for aa in data.auto_attendants.iter_mut() {
         let no_phone = aa.phone_number.is_empty() || aa.phone_number == "-";
-        aa.can_be_deleted = if no_phone { "Oui".into() } else { "Non".into() };
+        let has_resource_account = ra_aa_names.contains(&lower(&aa.name));
+        aa.can_be_deleted = if no_phone && !has_resource_account {
+            "Oui".into()
+        } else {
+            "Non".into()
+        };
     }
 }
 
@@ -548,7 +561,8 @@ pub fn check_ps_module() {
 }
 
 // Script PowerShell embarqué — utilise le module MicrosoftTeams.
-// Si TEAMS_TOKEN2 est fourni (token service Teams), il est passé en second pour accès complet.
+// Méthode d'authentification préférée : client_credentials (app-only) avec TEAMS_CLIENT_SECRET.
+// Fallback : tokens délégués passés par TEAMS_TOKEN/TEAMS_TOKEN2 (moins fiable sur module 7.x).
 // Exécuté de façon invisible (CREATE_NO_WINDOW + -WindowStyle Hidden).
 const PS_SCRIPT: &str = r#"
 $ErrorActionPreference = 'Stop'
@@ -584,40 +598,62 @@ try {
     }
     $teamsModVerStr = if ($teamsModVer) { [string]$teamsModVer } else { 'unknown' }
 
-    $graphToken  = $env:TEAMS_TOKEN
-    $teamsToken  = $env:TEAMS_TOKEN2
-    $hasTeams    = $teamsToken -and $teamsToken -ne ''
+    $clientSecret = $env:TEAMS_CLIENT_SECRET
+    $appId        = $env:TEAMS_APP_ID
+    $useAppAuth   = $clientSecret -and $clientSecret -ne '' -and $appId -and $appId -ne ''
 
-    # Selon la doc Connect-MicrosoftTeams v5+ : format @(TeamsToken, GraphToken).
-    # On essaie aussi l'ordre inverse et le token seul en fallback.
-    $combos = @()
-    if ($hasTeams) {
-        $combos += ,@($teamsToken, $graphToken)   # Teams first (doc v5+)
-        $combos += ,@($graphToken, $teamsToken)   # Graph first (doc v4)
-        $combos += ,@($teamsToken)                # Teams seul
-    }
-    $combos += ,@($graphToken)                    # Graph seul en dernier recours
+    if ($useAppAuth) {
+        # Authentification application (client_credentials) — méthode recommandée par Microsoft
+        # pour Connect-MicrosoftTeams dans un contexte non-interactif (module 5.x+).
+        # Ref: https://learn.microsoft.com/microsoftteams/teams-powershell-application-authentication
+        $uri = "https://login.microsoftonline.com/$($env:TEAMS_TENANT)/oauth2/v2.0/token"
 
-    $connectOk  = $false
-    $connectErr = ''
-    foreach ($toks in $combos) {
-        foreach ($envParam in @('Commercial', '')) {
+        $graphToken = (Invoke-RestMethod -Uri $uri -Method POST -UseBasicParsing -Body @{
+            grant_type    = 'client_credentials'
+            scope         = 'https://graph.microsoft.com/.default'
+            client_id     = $appId
+            client_secret = $clientSecret
+        } -ErrorAction Stop).access_token
+
+        $teamsToken = (Invoke-RestMethod -Uri $uri -Method POST -UseBasicParsing -Body @{
+            grant_type    = 'client_credentials'
+            scope         = '48ac35b8-9aa8-4d74-927d-1f4a14a0b239/.default'
+            client_id     = $appId
+            client_secret = $clientSecret
+        } -ErrorAction Stop).access_token
+
+        Connect-MicrosoftTeams -AccessTokens @($graphToken, $teamsToken) `
+            -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+    } else {
+        # Fallback : tokens délégués (moins fiable sur module 7.x — "Not supported tenant type")
+        # Configurez un Client Secret dans Azure et dans les paramètres de l'app pour résoudre ce problème.
+        $graphToken  = $env:TEAMS_TOKEN
+        $teamsToken  = $env:TEAMS_TOKEN2
+        $hasTeams    = $teamsToken -and $teamsToken -ne ''
+
+        $combos = @()
+        if ($hasTeams) {
+            $combos += ,@($graphToken, $teamsToken)
+            $combos += ,@($teamsToken, $graphToken)
+            $combos += ,@($teamsToken)
+        }
+        $combos += ,@($graphToken)
+
+        $connectOk  = $false
+        $connectErr = ''
+        foreach ($toks in $combos) {
             try {
-                if ($envParam -ne '') {
-                    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks -Environment $envParam -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
-                } else {
-                    Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
-                }
+                Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks `
+                    -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
                 $connectOk = $true
                 break
             } catch {
                 $connectErr = [string]$_.Exception.Message
             }
         }
-        if ($connectOk) { break }
-    }
-    if (-not $connectOk) {
-        throw "Connexion Teams PS échouée (module $teamsModVerStr) : $connectErr"
+        if (-not $connectOk) {
+            throw "Connexion Teams PS échouée (module $teamsModVerStr). Pour résoudre, ajoutez un Client Secret Azure dans les paramètres de l'application (onglet Configuration). Erreur : $connectErr"
+        }
     }
 
     $cqError = ''
@@ -682,10 +718,13 @@ try {
 
 /// Exécute le module PowerShell MicrosoftTeams en tâche de fond (sans fenêtre)
 /// pour récupérer les files d'attente et standards automatiques.
-/// graph_token : token Graph (requis)
-/// teams_token : token service Teams 48ac35b8-... (optionnel, améliore l'accès aux cmdlets)
+/// graph_token   : token Graph (requis, fallback si pas de client_secret)
+/// tenant_id     : ID du tenant Azure AD
+/// client_id     : ID de l'app Azure AD (pour client_credentials)
+/// teams_token   : token service Teams 48ac35b8-... (fallback délégué)
+/// client_secret : secret client Azure (active l'auth app-only recommandée)
 /// Retourne (call_queues, auto_attendants, diagnostics) — les diagnostics sont des warnings.
-fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Option<&str>) -> Result<(Vec<CallQueue>, Vec<AutoAttendant>, Vec<String>), String> {
+fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str, teams_token: Option<&str>, client_secret: Option<&str>) -> Result<(Vec<CallQueue>, Vec<AutoAttendant>, Vec<String>), String> {
     let temp_path = std::env::temp_dir().join("teams_analysis_fetch.ps1");
     std::fs::write(&temp_path, PS_SCRIPT.as_bytes())
         .map_err(|e| format!("Impossible d'écrire le script temporaire : {e}"))?;
@@ -703,6 +742,8 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Opt
     .env("TEAMS_TOKEN", graph_token)
     .env("TEAMS_TOKEN2", teams_token.unwrap_or(""))
     .env("TEAMS_TENANT", tenant_id)
+    .env("TEAMS_APP_ID", client_id)
+    .env("TEAMS_CLIENT_SECRET", client_secret.unwrap_or(""))
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
 
@@ -811,7 +852,7 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, teams_token: Opt
     Ok((cqs, aas, diagnostics))
 }
 
-pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, teams_token: Option<String>) -> DashboardData {
+pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_id: &str, teams_token: Option<String>, client_secret: Option<String>) -> DashboardData {
     let mut data = DashboardData::default();
     let mut sku_id_map: std::collections::HashMap<String, String> = Default::default();
     let mut assigned_numbers_by_target: std::collections::HashMap<String, Vec<String>> = Default::default();
@@ -979,14 +1020,17 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, teams_to
     }
 
     // Récupération des files d'attente et standards automatiques via PowerShell MicrosoftTeams.
-    // Utilise le token Graph + token service Teams si disponible (meilleur accès aux cmdlets).
+    // Méthode préférée : client_credentials (TEAMS_CLIENT_SECRET configuré).
+    // Fallback : tokens délégués (TEAMS_TOKEN / TEAMS_TOKEN2).
     // L'exécution est invisible (pas de fenêtre PowerShell).
     {
-        let tok = token.to_string();
-        let tid = tenant_id.to_string();
+        let tok      = token.to_string();
+        let tid      = tenant_id.to_string();
+        let app_id   = client_id.to_string();
         let teams_tok = teams_token.clone();
+        let client_sec = client_secret.clone();
         match tokio::task::spawn_blocking(move || {
-            run_powershell_for_teams(&tok, &tid, teams_tok.as_deref())
+            run_powershell_for_teams(&tok, &tid, &app_id, teams_tok.as_deref(), client_sec.as_deref())
         }).await {
             Ok(Ok((cqs, aas, diags))) => {
                 data.call_queues = cqs;
