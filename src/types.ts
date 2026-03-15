@@ -125,4 +125,4 @@ export type TabId =
   | "autoAttendants"
   | "resourceAccounts";
 
-export type AppScreen = "setup" | "auth" | "dashboard";
+export type AppScreen = "setup" | "settings" | "auth" | "dashboard";

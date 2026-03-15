@@ -65,8 +65,24 @@ export default function App() {
     setScreen("auth");
   }
 
+  // First-time setup: must connect to proceed
   if (screen === "setup") {
-    return <SetupScreen onSaved={() => setScreen("auth")} />;
+    return (
+      <SetupScreen
+        onConnect={() => setScreen("auth")}
+      />
+    );
+  }
+
+  // Settings overlay opened from dashboard: save without re-auth, or reconnect if needed
+  if (screen === "settings") {
+    return (
+      <SetupScreen
+        isSettings
+        onConnect={() => setScreen("auth")}
+        onClose={() => setScreen("dashboard")}
+      />
+    );
   }
 
   if (screen === "auth") {
@@ -89,7 +105,7 @@ export default function App() {
       runtimeError={runtimeError}
       onRefresh={handleRefresh}
       onDisconnect={handleDisconnect}
-      onSetup={() => setScreen("setup")}
+      onSetup={() => setScreen("settings")}
     />
   );
 }

@@ -18,16 +18,23 @@ pub struct AppState {
     pub client_secret: Mutex<String>,
 }
 
+/// Structure IPC (échangée avec le frontend). Tous les champs sont inclus lors de
+/// la sérialisation pour que le frontend puisse lire les valeurs chargées depuis le
+/// coffre-fort.  Le stockage sur disque n'utilise PAS cette struct directement.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
     pub tenant_id: String,
     pub client_id: String,
-    /// Chemin personnalisé pour le fichier de log (None = AppData par défaut).
+    pub log_path: Option<String>,
+    pub client_secret: Option<String>,
+}
+
+/// Structure minimale écrite sur disque (config.json).
+/// Contient uniquement les paramètres non-sensibles.
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct DiskConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_path: Option<String>,
-    /// Non sérialisé sur disque — transité uniquement en mémoire depuis/vers le keyring.
-    #[serde(default, skip_serializing)]
-    pub client_secret: Option<String>,
 }
 
 fn config_path(app: &AppHandle) -> std::path::PathBuf {
@@ -37,43 +44,48 @@ fn config_path(app: &AppHandle) -> std::path::PathBuf {
         .join("config.json")
 }
 
+// ─── Service Keyring ────────────────────────────────────────────────────────
+
+/// Service unique utilisé pour toute la configuration sécurisée.
+const CFG_SERVICE: &str = "teams-manager-config";
+/// Service utilisé pour les refresh tokens (chunks).
 const TOKEN_SERVICE: &str = "teams-license-telephony-manager";
-const SECRET_SERVICE: &str = "teams-license-telephony-manager-secret";
 const TOKEN_CHUNK_SIZE: usize = 1000;
 
-// ─── Stockage sécurisé du client_secret ──────────────────────────────────────
-
-fn secret_account(tenant_id: &str, client_id: &str) -> String {
-    format!("{}::{}::client_secret", tenant_id.trim(), client_id.trim())
-}
-
-fn save_secret_secure(tenant_id: &str, client_id: &str, secret: &str) -> Result<(), String> {
-    let entry = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id))
-        .map_err(|e| format!("Initialisation keyring (secret) : {e}"))?;
+fn keyring_save(account: &str, value: &str) -> Result<(), String> {
+    let entry = Entry::new(CFG_SERVICE, account)
+        .map_err(|e| format!("Coffre-fort init ({account}) : {e}"))?;
     entry
-        .set_password(secret)
-        .map_err(|e| format!("Ecriture keyring (secret) : {e}"))
+        .set_password(value)
+        .map_err(|e| format!("Coffre-fort écriture ({account}) : {e}"))
 }
 
-fn load_secret_secure(tenant_id: &str, client_id: &str) -> Option<String> {
-    let entry = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id)).ok()?;
+fn keyring_load(account: &str) -> Option<String> {
+    let entry = Entry::new(CFG_SERVICE, account).ok()?;
     match entry.get_password() {
         Ok(s) if !s.is_empty() => Some(s),
         _ => None,
     }
 }
 
-fn delete_secret_secure(tenant_id: &str, client_id: &str) {
-    if let Ok(entry) = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id)) {
+fn keyring_delete(account: &str) {
+    if let Ok(entry) = Entry::new(CFG_SERVICE, account) {
         let _ = entry.delete_credential();
     }
+}
+
+// ─── Token sécurisé (refresh token en plusieurs morceaux) ───────────────────
+
+fn token_account(tenant_id: &str, client_id: &str) -> String {
+    let tenant = if tenant_id.trim().is_empty() { "default-tenant" } else { tenant_id.trim() };
+    let client = if client_id.trim().is_empty() { "default-client" } else { client_id.trim() };
+    format!("{}::{}", tenant, client)
 }
 
 fn split_for_windows_keyring(input: &str, max_utf16_units: usize) -> Vec<String> {
     let mut chunks = Vec::new();
     let mut current = String::new();
     let mut current_units = 0usize;
-
     for ch in input.chars() {
         let ch_units = ch.len_utf16();
         if current_units + ch_units > max_utf16_units && !current.is_empty() {
@@ -84,18 +96,10 @@ fn split_for_windows_keyring(input: &str, max_utf16_units: usize) -> Vec<String>
         current.push(ch);
         current_units += ch_units;
     }
-
     if !current.is_empty() {
         chunks.push(current);
     }
-
     chunks
-}
-
-fn token_account(tenant_id: &str, client_id: &str) -> String {
-    let tenant = if tenant_id.trim().is_empty() { "default-tenant" } else { tenant_id.trim() };
-    let client = if client_id.trim().is_empty() { "default-client" } else { client_id.trim() };
-    format!("{}::{}", tenant, client)
 }
 
 fn save_token_secure(tenant_id: &str, client_id: &str, token: &auth::TokenSet) -> Result<(), String> {
@@ -109,17 +113,17 @@ fn save_token_secure(tenant_id: &str, client_id: &str, token: &auth::TokenSet) -
     let chunks = split_for_windows_keyring(refresh, TOKEN_CHUNK_SIZE);
 
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
+        .map_err(|e| format!("Coffre-fort init (meta token) : {e}"))?;
     meta_entry
         .set_password(&chunks.len().to_string())
-        .map_err(|e| format!("Ecriture keyring (meta) : {e}"))?;
+        .map_err(|e| format!("Coffre-fort écriture (meta token) : {e}"))?;
 
     for (idx, chunk) in chunks.iter().enumerate() {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
+            .map_err(|e| format!("Coffre-fort init (token partie {idx}) : {e}"))?;
         entry
             .set_password(chunk)
-            .map_err(|e| format!("Ecriture keyring (partie {idx}) : {e}"))?;
+            .map_err(|e| format!("Coffre-fort écriture (token partie {idx}) : {e}"))?;
     }
 
     logger::info("Refresh token stocké dans le coffre-fort système.");
@@ -129,27 +133,27 @@ fn save_token_secure(tenant_id: &str, client_id: &str, token: &auth::TokenSet) -
 fn load_token_secure(tenant_id: &str, client_id: &str) -> Result<Option<String>, String> {
     let base_account = token_account(tenant_id, client_id);
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
+        .map_err(|e| format!("Coffre-fort init (meta token) : {e}"))?;
 
     let count_raw = match meta_entry.get_password() {
         Ok(v) => v,
         Err(keyring::Error::NoEntry) => return Ok(None),
-        Err(e) => return Err(format!("Lecture keyring (meta) : {e}")),
+        Err(e) => return Err(format!("Coffre-fort lecture (meta token) : {e}")),
     };
 
     let count: usize = count_raw
         .parse()
-        .map_err(|e| format!("Nombre de segments invalide dans le keyring : {e}"))?;
+        .map_err(|e| format!("Nombre de segments token invalide : {e}"))?;
 
     let mut refresh = String::new();
     for idx in 0..count {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
+            .map_err(|e| format!("Coffre-fort init (token partie {idx}) : {e}"))?;
 
         let chunk = match entry.get_password() {
             Ok(v) => v,
-            Err(keyring::Error::NoEntry) => return Err(format!("Segment keyring manquant : {idx}")),
-            Err(e) => return Err(format!("Lecture keyring (partie {idx}) : {e}")),
+            Err(keyring::Error::NoEntry) => return Err(format!("Segment token manquant : {idx}")),
+            Err(e) => return Err(format!("Coffre-fort lecture (token partie {idx}) : {e}")),
         };
         refresh.push_str(&chunk);
     }
@@ -160,52 +164,113 @@ fn load_token_secure(tenant_id: &str, client_id: &str) -> Result<Option<String>,
 fn delete_token_secure(tenant_id: &str, client_id: &str) -> Result<(), String> {
     let base_account = token_account(tenant_id, client_id);
     let meta_entry = Entry::new(TOKEN_SERVICE, &format!("{}::count", base_account))
-        .map_err(|e| format!("Initialisation keyring (meta) : {e}"))?;
+        .map_err(|e| format!("Coffre-fort init (meta token suppression) : {e}"))?;
 
     let count = match meta_entry.get_password() {
         Ok(v) => v.parse::<usize>().unwrap_or(0),
         Err(keyring::Error::NoEntry) => 0,
-        Err(e) => return Err(format!("Lecture keyring avant suppression : {e}")),
+        Err(e) => return Err(format!("Coffre-fort lecture avant suppression : {e}")),
     };
 
     for idx in 0..count {
         let entry = Entry::new(TOKEN_SERVICE, &format!("{}::part::{}", base_account, idx))
-            .map_err(|e| format!("Initialisation keyring (partie {idx}) : {e}"))?;
+            .map_err(|e| format!("Coffre-fort init (suppression partie {idx}) : {e}"))?;
         match entry.delete_credential() {
             Ok(_) | Err(keyring::Error::NoEntry) => {}
-            Err(e) => return Err(format!("Suppression keyring (partie {idx}) : {e}")),
+            Err(e) => return Err(format!("Coffre-fort suppression (partie {idx}) : {e}")),
         }
     }
 
     match meta_entry.delete_credential() {
         Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(format!("Suppression keyring (meta) : {e}")),
+        Err(e) => Err(format!("Coffre-fort suppression (meta token) : {e}")),
     }
 }
 
+// ─── Chargement / sauvegarde de la configuration ────────────────────────────
+
 #[tauri::command]
 async fn load_config(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<Option<AppConfig>, String> {
-    let path = config_path(&app);
-    if !path.exists() {
-        logger::info("Aucun fichier de configuration trouvé.");
+    // 1. Lire les paramètres non-sensibles depuis le disque (log_path uniquement).
+    let config_file = config_path(&app);
+    let disk: DiskConfig = if config_file.exists() {
+        let text = std::fs::read_to_string(&config_file)
+            .map_err(|e| format!("Lecture config.json : {e}"))?;
+        serde_json::from_str(&text).unwrap_or_default()
+    } else {
+        DiskConfig::default()
+    };
+
+    // 2. Lire les identifiants depuis le coffre-fort Windows.
+    let mut tenant_id = keyring_load("tenant_id").unwrap_or_default();
+    let mut client_id = keyring_load("client_id").unwrap_or_default();
+    let mut client_secret = keyring_load("client_secret");
+
+    // 3. Migration transparente : si l'ancien config.json contient encore tenant/client,
+    //    les déplacer dans le coffre-fort et réécrire le fichier sans ces champs.
+    if tenant_id.is_empty() || client_id.is_empty() {
+        if config_file.exists() {
+            #[derive(Deserialize, Default)]
+            struct OldConfig {
+                #[serde(default)]
+                tenant_id: String,
+                #[serde(default)]
+                client_id: String,
+                #[serde(default)]
+                log_path: Option<String>,
+            }
+
+            if let Ok(text) = std::fs::read_to_string(&config_file) {
+                if let Ok(old) = serde_json::from_str::<OldConfig>(&text) {
+                    if !old.tenant_id.is_empty() && !old.client_id.is_empty() {
+                        logger::info("Migration des identifiants Azure AD vers le coffre-fort Windows.");
+                        let _ = keyring_save("tenant_id", &old.tenant_id);
+                        let _ = keyring_save("client_id", &old.client_id);
+                        tenant_id = old.tenant_id.clone();
+                        client_id = old.client_id.clone();
+
+                        // Migrer l'ancien format du secret (compte dérivé de tenant+client).
+                        if client_secret.is_none() {
+                            const OLD_SECRET_SERVICE: &str = "teams-license-telephony-manager-secret";
+                            let old_account = format!("{}::{}::client_secret", old.tenant_id.trim(), old.client_id.trim());
+                            if let Ok(entry) = Entry::new(OLD_SECRET_SERVICE, &old_account) {
+                                if let Ok(s) = entry.get_password() {
+                                    if !s.is_empty() {
+                                        let _ = keyring_save("client_secret", &s);
+                                        client_secret = Some(s);
+                                        let _ = entry.delete_credential();
+                                        logger::info("Client secret migré vers le nouveau coffre-fort.");
+                                    }
+                                }
+                            }
+                        }
+
+                        // Réécrire config.json sans les champs sensibles.
+                        let new_disk = DiskConfig { log_path: old.log_path };
+                        if let Ok(json) = serde_json::to_string_pretty(&new_disk) {
+                            let _ = std::fs::write(&config_file, json);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if tenant_id.is_empty() || client_id.is_empty() {
+        logger::info("Aucune configuration trouvée dans le coffre-fort.");
         return Ok(None);
     }
 
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("Lecture de la configuration : {e}"))?;
-    let mut cfg: AppConfig = serde_json::from_str(&text).map_err(|e| format!("Configuration invalide : {e}"))?;
+    // 4. Mettre à jour l'état en mémoire.
+    *state.tenant_id.lock().await = tenant_id.clone();
+    *state.client_id.lock().await = client_id.clone();
+    *state.client_secret.lock().await = client_secret.clone().unwrap_or_default();
 
-    // Récupération du secret depuis le coffre-fort système (jamais stocké sur disque).
-    let secret = load_secret_secure(&cfg.tenant_id, &cfg.client_id);
-    cfg.client_secret = secret.clone();
-
-    *state.tenant_id.lock().await = cfg.tenant_id.clone();
-    *state.client_id.lock().await = cfg.client_id.clone();
-    *state.client_secret.lock().await = secret.unwrap_or_default();
-
-    match load_token_secure(&cfg.tenant_id, &cfg.client_id) {
+    // 5. Tenter de restaurer la session depuis le refresh token.
+    match load_token_secure(&tenant_id, &client_id) {
         Ok(Some(refresh)) => {
             let http = reqwest::Client::new();
-            match auth::refresh_access_token(&http, &cfg.tenant_id, &cfg.client_id, &refresh).await {
+            match auth::refresh_access_token(&http, &tenant_id, &client_id, &refresh).await {
                 Ok(token) => {
                     *state.token.lock().await = Some(token);
                     logger::info("Session restaurée depuis le refresh token.");
@@ -219,48 +284,79 @@ async fn load_config(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<
         Err(e) => logger::warn(&format!("Erreur lors du chargement du token sécurisé : {e}")),
     }
 
-    Ok(Some(cfg))
+    Ok(Some(AppConfig {
+        tenant_id,
+        client_id,
+        client_secret,
+        log_path: disk.log_path,
+    }))
 }
 
 #[tauri::command]
 async fn save_config(app: AppHandle, config: AppConfig, state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    let path = config_path(&app);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("Création du dossier de configuration : {e}"))?;
+    // 1. Stocker les identifiants sensibles dans le coffre-fort.
+    keyring_save("tenant_id", config.tenant_id.trim())?;
+    keyring_save("client_id", config.client_id.trim())?;
+
+    match config.client_secret.as_deref() {
+        Some(s) if !s.trim().is_empty() => {
+            keyring_save("client_secret", s.trim())?;
+            logger::info("Client secret enregistré dans le coffre-fort système.");
+        }
+        Some(_) => {
+            // Chaîne vide = l'utilisateur a effacé le secret : supprimer.
+            keyring_delete("client_secret");
+            logger::info("Client secret supprimé du coffre-fort système.");
+        }
+        None => {
+            // None = champ absent : on conserve l'entrée existante (cas défensif).
+        }
     }
 
-    // client_secret est skip_serializing → jamais écrit dans le fichier JSON.
-    let text = serde_json::to_string_pretty(&config).map_err(|e| format!("Sérialisation de la configuration : {e}"))?;
-    std::fs::write(&path, text).map_err(|e| format!("Ecriture de la configuration : {e}"))?;
+    // 2. Ecrire uniquement log_path sur le disque (config.json ne contient rien de sensible).
+    let disk = DiskConfig { log_path: config.log_path.clone() };
+    let path = config_path(&app);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Création du dossier de configuration : {e}"))?;
+    }
+    let text = serde_json::to_string_pretty(&disk)
+        .map_err(|e| format!("Sérialisation config : {e}"))?;
+    std::fs::write(&path, text)
+        .map_err(|e| format!("Ecriture config.json : {e}"))?;
 
+    // 3. Gérer le changement de tenant / client (invalider le token existant).
     let old_tenant = state.tenant_id.lock().await.clone();
     let old_client = state.client_id.lock().await.clone();
-    let tenant_changed = !old_tenant.is_empty() && !old_client.is_empty()
-        && (old_tenant != config.tenant_id || old_client != config.client_id);
+    let tenant_changed = !old_tenant.is_empty()
+        && !old_client.is_empty()
+        && (old_tenant != config.tenant_id.trim() || old_client != config.client_id.trim());
     if tenant_changed {
         let _ = delete_token_secure(&old_tenant, &old_client);
-        delete_secret_secure(&old_tenant, &old_client);
         *state.token.lock().await = None;
     }
 
-    // Stocker / supprimer le client_secret dans le coffre-fort système.
-    match &config.client_secret {
-        Some(s) if !s.trim().is_empty() => {
-            save_secret_secure(&config.tenant_id, &config.client_id, s.trim())?;
-            logger::info("Client secret enregistré dans le coffre-fort système.");
-        }
-        _ => {
-            // Si le champ est vide, on supprime l'entrée existante (l'utilisateur a effacé le secret).
-            delete_secret_secure(&config.tenant_id, &config.client_id);
+    // 4. Mettre à jour l'état en mémoire.
+    *state.tenant_id.lock().await = config.tenant_id.trim().to_string();
+    *state.client_id.lock().await = config.client_id.trim().to_string();
+    if let Some(s) = &config.client_secret {
+        if !s.trim().is_empty() {
+            *state.client_secret.lock().await = s.trim().to_string();
         }
     }
 
-    *state.tenant_id.lock().await = config.tenant_id.clone();
-    *state.client_id.lock().await = config.client_id.clone();
-    *state.client_secret.lock().await = config.client_secret.clone().unwrap_or_default();
+    // 5. Appliquer un chemin de log personnalisé à chaud si modifié.
+    if let Some(lp) = &config.log_path {
+        if !lp.trim().is_empty() {
+            let _ = logger::set_custom_path(lp.trim());
+        }
+    }
+
     logger::info("Configuration enregistrée.");
     Ok(())
 }
+
+// ─── Commandes d'authentification ───────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceCodeResult {
@@ -334,6 +430,8 @@ async fn disconnect(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Commande principale de collecte Graph ───────────────────────────────────
+
 #[tauri::command]
 async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardData, String> {
     let current = {
@@ -369,13 +467,10 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
         if s.is_empty() { None } else { Some(s) }
     };
 
-    // Lecture du refresh token courant (potentiellement mis à jour si on vient de rafraîchir).
     let current_refresh = state.token.lock().await
         .as_ref()
         .and_then(|t| t.refresh_token.clone());
 
-    // Tentative d'obtention d'un token Teams service (48ac35b8-...) via le refresh token.
-    // Nécessite que l'app registration ait la permission Teams service — échoue silencieusement sinon.
     let teams_token = if let Some(rt) = current_refresh {
         match auth::get_teams_service_token(&http, &tenant_id, &client_id, &rt).await {
             Ok(t) => {
@@ -383,7 +478,7 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
                 Some(t)
             }
             Err(e) => {
-                logger::warn(&format!("Token service Teams indisponible (app sans permission Teams ?) : {e}"));
+                logger::warn(&format!("Token service Teams indisponible : {e}"));
                 None
             }
         }
@@ -394,6 +489,8 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
     logger::info("Lancement de la collecte des données Graph.");
     Ok(graph::collect_all(&http, &usable_access_token, &tenant_id, &client_id, teams_token, client_secret).await)
 }
+
+// ─── Export CSV ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
 async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: String, app: AppHandle) -> Result<String, String> {
@@ -431,7 +528,9 @@ async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: Stri
     Ok(path_str)
 }
 
-/// Retourne des infos de diagnostic : PS exe utilisé + chemin du log.
+// ─── Commandes utilitaires ───────────────────────────────────────────────────
+
+/// Retourne des infos de diagnostic : exe PS utilisé + chemin du log.
 #[tauri::command]
 fn get_ps_info() -> String {
     let exe = graph::ps_exe_name();
@@ -449,7 +548,8 @@ fn open_log_file(app: tauri::AppHandle) -> Result<(), String> {
     if !path.exists() {
         std::fs::write(&path, "").map_err(|e| e.to_string())?;
     }
-    app.opener().open_path(path.to_string_lossy().as_ref(), None::<&str>)
+    app.opener()
+        .open_path(path.to_string_lossy().as_ref(), None::<&str>)
         .map_err(|e| e.to_string())
 }
 
@@ -465,7 +565,7 @@ async fn pick_log_folder(app: AppHandle) -> Result<String, String> {
     Ok(folder.to_string())
 }
 
-/// Retourne le chemin actuel du fichier de log (pour l'affichage dans les paramètres).
+/// Retourne le chemin actuel du fichier de log.
 #[tauri::command]
 fn get_log_path() -> String {
     logger::current_path()
@@ -488,13 +588,15 @@ fn log_frontend_error(context: String, message: String) {
     logger::error(&format!("Frontend - {context} : {message}"));
 }
 
+// ─── Point d'entrée ──────────────────────────────────────────────────────────
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = Arc::new(AppState::default());
 
     tauri::Builder::default()
         .setup(|app| {
-            // Charger la config pour récupérer un éventuel chemin de log personnalisé.
+            // Charger le chemin de log personnalisé depuis config.json avant d'initialiser le logger.
             let custom_log = (|| {
                 let cfg_path = app.handle().path().app_config_dir().ok()?.join("config.json");
                 let text = std::fs::read_to_string(cfg_path).ok()?;
@@ -504,8 +606,6 @@ pub fn run() {
             let log_path = logger::init(app.handle(), custom_log.as_deref())?;
             logger::info(&format!("Fichier de log : {}", log_path.display()));
 
-            // Windows : vérification et installation silencieuse du module PowerShell MicrosoftTeams.
-            // Tourne en arrière-plan pour ne pas bloquer le démarrage de l'interface.
             #[cfg(windows)]
             {
                 logger::info("Lancement de la vérification du module PowerShell MicrosoftTeams en arrière-plan...");

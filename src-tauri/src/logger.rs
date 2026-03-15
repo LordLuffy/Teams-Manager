@@ -1,4 +1,9 @@
-use std::{fs::OpenOptions, io::Write, path::PathBuf, sync::{Mutex, OnceLock, RwLock}, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    path::PathBuf,
+    sync::{Mutex, OnceLock, RwLock},
+};
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -8,16 +13,11 @@ static LOG_FILE_PATH: OnceLock<RwLock<PathBuf>> = OnceLock::new();
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 fn timestamp() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    format!("{}", now)
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 pub fn init(app: &AppHandle, custom_path: Option<&str>) -> Result<PathBuf, String> {
     let path = if let Some(cp) = custom_path.filter(|s| !s.trim().is_empty()) {
-        // Chemin personnalisé : utiliser le dossier fourni par l'utilisateur.
         let dir = PathBuf::from(cp.trim());
         std::fs::create_dir_all(&dir)
             .map_err(|e| format!("Impossible de créer le dossier de logs personnalisé : {e}"))?;
@@ -64,7 +64,7 @@ fn append(level: &str, message: &str) {
     };
     let _guard = WRITE_LOCK.lock().ok();
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(file, "[{}] [{}] {}", timestamp(), level, message);
+        let _ = writeln!(file, "{} [{:<5}] {}", timestamp(), level, message);
     }
 }
 

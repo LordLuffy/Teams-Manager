@@ -56,6 +56,17 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
   const needsPs7 = psState === "error" && psMsg.includes("PowerShell 7");
   const needsSecret = (psWarning ?? "").includes("Client Secret") || (psState === "error" && psMsg.includes("Client Secret"));
 
+  async function openLogs() {
+    try {
+      await invoke("open_log_file");
+    } catch (error) {
+      await invoke("log_frontend_error", {
+        context: "ouverture fichier de log",
+        message: error instanceof Error ? error.message : String(error),
+      }).catch(() => undefined);
+    }
+  }
+
   // Charger les infos PS dès que le banner est visible pour les onglets CQ/AA
   async function loadPsInfo() {
     if (psInfo) return;
@@ -158,6 +169,10 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
         </nav>
 
         <div style={{ padding: "10px 8px 14px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={openLogs}>
+            <LogIcon />
+            Voir les logs
+          </button>
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={onSetup}>
             <SettingsIcon />
             Paramètres
