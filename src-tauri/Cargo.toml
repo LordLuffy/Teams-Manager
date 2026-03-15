@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Teams License & Telephony Manager"
 authors = []
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "teams_manager_lib"

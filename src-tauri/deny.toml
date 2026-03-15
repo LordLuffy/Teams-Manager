@@ -1,0 +1,67 @@
+# cargo-deny configuration pour Teams Manager
+# Exécuter : cargo deny check   (depuis src-tauri/)
+
+# ── Advisories (vulnérabilités et crates non maintenus) ──────────────────────
+[advisories]
+# Crates non maintenus tirés en transitivité par Tauri/wry — aucune action possible de notre côté.
+ignore = [
+  # gtk-rs GTK3 bindings (Linux uniquement, non inclus dans le binaire Windows)
+  "RUSTSEC-2024-0411",  # gdkwayland-sys
+  "RUSTSEC-2024-0412",  # gdk
+  "RUSTSEC-2024-0413",  # atk
+  "RUSTSEC-2024-0414",  # gdkx11-sys
+  "RUSTSEC-2024-0415",  # gtk
+  "RUSTSEC-2024-0416",  # atk-sys
+  "RUSTSEC-2024-0417",  # gdkx11
+  "RUSTSEC-2024-0418",  # gdk-sys
+  "RUSTSEC-2024-0419",  # gtk-sys
+  "RUSTSEC-2024-0420",  # gtk3-macros
+
+  # Crates utilitaires non maintenus (tirés par tauri-utils / tauri-macros)
+  "RUSTSEC-2024-0370",  # proc-macro-error
+  "RUSTSEC-2025-0057",  # fxhash
+
+  # unic-* (tirés par tauri-utils pour la gestion des identifiants Unicode)
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
+
+# uds_windows est yanked mais tiré en transitivité par tauri-plugin-opener via zbus.
+# On ne peut pas le mettre à jour directement — on passe en warn jusqu'à ce que Tauri le corrige.
+yanked = "warn"
+
+# ── Licences ─────────────────────────────────────────────────────────────────
+[licenses]
+# Licences permissives standard
+allow = [
+  "MIT",
+  "MIT-0",              # MIT sans clause d'attribution (dunce)
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",  # rustix, linux-raw-sys, wasi, wit-bindgen
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",                # ring, rustls, hyper-rustls
+  "0BSD",               # adler2
+  "BSL-1.0",            # ryu (Boost Software License — permissif)
+  "Zlib",               # bytemuck, miniz_oxide, objc2-*
+  "Unlicense",          # aho-corasick, memchr, walkdir
+  "CC0-1.0",            # dunce (domaine public)
+  "CDLA-Permissive-2.0", # webpki-roots (Linux Foundation — permissif pour données)
+  "Unicode-3.0",        # icu_* crates (tirés par idna/url/reqwest)
+  "MPL-2.0",            # cssparser, selectors, option-ext (tirés par tauri-utils/wry)
+  "LGPL-2.1-or-later",  # r-efi (EFI/UEFI — target WASI/Linux, non lié sur Windows)
+]
+
+# ── Interdictions ─────────────────────────────────────────────────────────────
+[bans]
+# Interdire les crates avec des CVE connues non corrigées (au-delà des "unmaintained")
+deny = []
+
+# ── Sources autorisées ────────────────────────────────────────────────────────
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
