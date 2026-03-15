@@ -40,3 +40,7 @@ Thumbs.db
 # Local app config / tokens
 config.json
 token.json
+
+# Claude Code — contient les transcripts de conversation et la configuration locale
+# Ne jamais commiter : peut contenir des infos sensibles (IDs, tokens, historique)
+.claude/

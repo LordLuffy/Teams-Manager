@@ -64,12 +64,14 @@ TeamsAnalysis/
 
 ### Fichiers de données
 
-| Fichier | Emplacement Windows |
-|---------|---------------------|
-| Configuration | `%APPDATA%\com.teams-manager.app\config.json` |
-| Logs | `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log` |
+| Donnée | Emplacement |
+|--------|-------------|
+| Chemin de logs personnalisé | `%APPDATA%\com.teams-manager.app\config.json` (seul champ non-sensible) |
+| Logs applicatifs | `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log` (par défaut) |
+| **Tenant ID, Client ID, Client Secret** | **Gestionnaire d'informations d'identification Windows** (chiffré, jamais sur disque en clair) |
+| Refresh token Microsoft | **Gestionnaire d'informations d'identification Windows** (chiffré, découpé en segments) |
 
-> Le **Client Secret** Azure AD n'est jamais écrit dans `config.json` — il est stocké de façon sécurisée dans le **Gestionnaire d'informations d'identification Windows** (keyring).
+> **Sécurité** : `config.json` ne contient **aucun identifiant sensible**. Le Tenant ID, le Client ID et le Client Secret sont tous stockés dans le coffre-fort Windows (Windows Credential Manager). Le fichier `config.json` peut être commité sans risque — il ne contient que le chemin optionnel des logs.
 
 ---
 
@@ -93,7 +95,7 @@ Les onglets **Files d'attente** et **Standards automatiques** utilisent le modul
 | `Get-CsCallQueue` | Files d'attente Teams |
 | `Get-CsAutoAttendant` | Standards automatiques |
 
-**Authentification** : le module PowerShell MicrosoftTeams v7.x utilise le flux `client_credentials` (app-only), qui nécessite un **Client Secret** Azure AD. Voir la section 5 pour la configuration complète.
+**Authentification** : le module PowerShell MicrosoftTeams v7.x utilise le flux `client_credentials` (app-only), qui nécessite un **Client Secret** Azure AD. Voir la section 4 — Paramétrage avancé pour la configuration complète.
 
 ---
 
@@ -126,7 +128,7 @@ Les cmdlets PowerShell `Get-CsCallQueue` / `Get-CsAutoAttendant` nécessitent un
 1. Dans votre App Registration → **Certificates & secrets** → New client secret → copiez la valeur
 2. **API permissions** → Microsoft Graph → **Application** → ajoutez `Organization.Read.All` → Grant admin consent
 3. **Microsoft Entra ID** (niveau tenant) → **Rôles et administrateurs** → cherchez **Teams Administrator** → **Add assignments** → ajoutez votre application
-4. Dans l'application Teams Manager → écran **Configuration** → collez le Client Secret dans le champ prévu
+4. Dans l'application Teams Manager → bouton **Paramètres** (sidebar) → section **Files d'attente & Standards automatiques** → collez le Client Secret → cliquez **Enregistrer**
 
 > **Important** : L'assignation du rôle Teams Administrator se fait dans **Microsoft Entra ID → Rôles et administrateurs** (niveau tenant), et non dans les Rôles de l'App Registration. Aucune licence Entra ID Premium n'est requise pour assigner un rôle administrateur intégré.
 
@@ -159,12 +161,23 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 
 ## 6. Utilisation
 
-1. Au premier lancement : saisir le **Tenant ID** et le **Client ID** Azure AD
-2. Cliquer **Se connecter avec Microsoft** → suivre les instructions du code appareil sur `aka.ms/devicelogin`
-3. Après authentification, l'application charge automatiquement les données
-4. Naviguer entre les onglets via la sidebar
-5. **Actualiser** pour rafraîchir les données
-6. **Exporter CSV** dans chaque onglet pour exporter les données filtrées
+### Premier lancement
+
+1. L'écran **Configuration** s'ouvre automatiquement
+2. Dépliez la section **Connexion Azure AD** → saisir le **Tenant ID** et le **Client ID**
+3. Cliquer **Se connecter avec Microsoft** → suivre les instructions du code appareil sur `aka.ms/devicelogin`
+4. Après authentification, l'application charge automatiquement les données
+
+### Navigation
+
+- Naviguer entre les onglets via la **sidebar** gauche
+- Bouton **Actualiser** (topbar) pour rafraîchir les données
+- Bouton **Exporter CSV** dans chaque onglet pour exporter les données filtrées
+- Bouton **Voir les logs** (sidebar) pour ouvrir le fichier de log dans le Bloc-notes
+- Bouton **Paramètres** (sidebar) pour modifier la configuration sans se déconnecter :
+  - Modifier les identifiants Azure AD et se **reconnecter**
+  - Ajouter / modifier le **Client Secret** (stocké de façon sécurisée)
+  - Changer le **dossier des logs**
 
 ### Résolution des problèmes — onglets Files d'attente / Standards automatiques
 
@@ -177,5 +190,5 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 | 0 résultats sans erreur | `Get-CsCallQueue` retourne vide | Vérifier que le compte a des droits Teams admin |
 | Bannière orange persistante après configuration | Secret incorrect ou permissions non consenties | Vérifier les permissions et le consentement admin dans Azure |
 
-Les logs sont accessibles via le bouton **Voir les logs** dans la bannière de statut, ou manuellement dans :
+Les logs sont accessibles via le bouton **Voir les logs** dans la sidebar, ou manuellement dans :
 `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
