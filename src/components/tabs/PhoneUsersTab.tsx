@@ -28,5 +28,14 @@ const columns: Column<PhoneUser>[] = [
 ];
 
 export default function PhoneUsersTab({ data }: Props) {
-  return <DataTable<PhoneUser> columns={columns} data={data} exportFilename="utilisateurs_avec_numero.csv" />;
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>
+        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+          Utilisateurs ayant un <strong>numéro Teams actif</strong> et la fonctionnalité <strong>voix d'entreprise (EV)</strong> activée. Ces utilisateurs peuvent passer et recevoir des appels téléphoniques via Microsoft Teams.
+        </p>
+      </div>
+      <DataTable<PhoneUser> columns={columns} data={data} exportFilename="utilisateurs_avec_numero.csv" />
+    </>
+  );
 }

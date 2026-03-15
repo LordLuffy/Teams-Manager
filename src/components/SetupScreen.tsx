@@ -9,6 +9,7 @@ export default function SetupScreen({ onSaved }: Props) {
   const [tenantId, setTenantId] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [logPath, setLogPath] = useState("");
   const [showSecretInfo, setShowSecretInfo] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
@@ -16,11 +17,12 @@ export default function SetupScreen({ onSaved }: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const cfg = await invoke<{ tenant_id: string; client_id: string; client_secret?: string } | null>("load_config");
+        const cfg = await invoke<{ tenant_id: string; client_id: string; client_secret?: string; log_path?: string } | null>("load_config");
         if (cfg) {
           setTenantId(cfg.tenant_id ?? "");
           setClientId(cfg.client_id ?? "");
           setClientSecret(cfg.client_secret ?? "");
+          setLogPath(cfg.log_path ?? "");
         }
       } catch (error) {
         setErr("Impossible de charger la configuration existante.");
@@ -32,6 +34,18 @@ export default function SetupScreen({ onSaved }: Props) {
     })();
   }, []);
 
+  async function pickLogFolder() {
+    try {
+      const picked = await invoke<string | null>("pick_log_folder");
+      if (picked) setLogPath(picked);
+    } catch (error) {
+      await invoke("log_frontend_error", {
+        context: "sélection du dossier de logs",
+        message: error instanceof Error ? error.message : String(error),
+      }).catch(() => undefined);
+    }
+  }
+
   async function handleSubmit() {
     if (!tenantId.trim() || !clientId.trim()) {
       setErr("Le Tenant ID et le Client ID sont obligatoires.");
@@ -41,11 +55,12 @@ export default function SetupScreen({ onSaved }: Props) {
     setSaving(true);
     setErr("");
     try {
-      const config: { tenant_id: string; client_id: string; client_secret?: string } = {
+      const config: { tenant_id: string; client_id: string; client_secret?: string; log_path?: string } = {
         tenant_id: tenantId.trim(),
         client_id: clientId.trim(),
       };
       if (clientSecret.trim()) config.client_secret = clientSecret.trim();
+      if (logPath.trim()) config.log_path = logPath.trim();
       await invoke("save_config", { config });
       onSaved();
     } catch (error) {
@@ -139,8 +154,49 @@ export default function SetupScreen({ onSaved }: Props) {
                   value={clientSecret}
                   onChange={(e) => setClientSecret(e.target.value)}
                 />
+                <p style={{ color: "var(--text-3)", fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                  Stocké de façon sécurisée dans le Gestionnaire d'informations d'identification Windows — jamais en clair dans les fichiers.
+                </p>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Section optionnelle : Chemin personnalisé pour les logs */}
+        <div style={{ marginTop: 20, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          <p style={{ color: "var(--text-2)", fontSize: 13, fontWeight: 500, marginBottom: 10, marginTop: 0 }}>
+            Dossier des journaux (optionnel)
+          </p>
+          <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 0, marginBottom: 10 }}>
+            Par défaut, les logs sont enregistrés dans le dossier AppData de l'application. Vous pouvez choisir un emplacement personnalisé.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="input"
+              style={{ flex: 1, fontSize: 12 }}
+              placeholder="Chemin AppData par défaut"
+              value={logPath}
+              onChange={(e) => setLogPath(e.target.value)}
+            />
+            <button
+              className="btn"
+              style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "0 12px", fontSize: 12 }}
+              onClick={pickLogFolder}
+              title="Choisir un dossier"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+              </svg>
+              Parcourir
+            </button>
+          </div>
+          {logPath && (
+            <button
+              style={{ marginTop: 6, background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 11, padding: 0 }}
+              onClick={() => setLogPath("")}
+            >
+              ✕ Réinitialiser (utiliser AppData)
+            </button>
           )}
         </div>
 

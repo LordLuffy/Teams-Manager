@@ -22,7 +22,11 @@ pub struct AppState {
 pub struct AppConfig {
     pub tenant_id: String,
     pub client_id: String,
+    /// Chemin personnalisé pour le fichier de log (None = AppData par défaut).
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<String>,
+    /// Non sérialisé sur disque — transité uniquement en mémoire depuis/vers le keyring.
+    #[serde(default, skip_serializing)]
     pub client_secret: Option<String>,
 }
 
@@ -34,7 +38,36 @@ fn config_path(app: &AppHandle) -> std::path::PathBuf {
 }
 
 const TOKEN_SERVICE: &str = "teams-license-telephony-manager";
+const SECRET_SERVICE: &str = "teams-license-telephony-manager-secret";
 const TOKEN_CHUNK_SIZE: usize = 1000;
+
+// ─── Stockage sécurisé du client_secret ──────────────────────────────────────
+
+fn secret_account(tenant_id: &str, client_id: &str) -> String {
+    format!("{}::{}::client_secret", tenant_id.trim(), client_id.trim())
+}
+
+fn save_secret_secure(tenant_id: &str, client_id: &str, secret: &str) -> Result<(), String> {
+    let entry = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id))
+        .map_err(|e| format!("Initialisation keyring (secret) : {e}"))?;
+    entry
+        .set_password(secret)
+        .map_err(|e| format!("Ecriture keyring (secret) : {e}"))
+}
+
+fn load_secret_secure(tenant_id: &str, client_id: &str) -> Option<String> {
+    let entry = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id)).ok()?;
+    match entry.get_password() {
+        Ok(s) if !s.is_empty() => Some(s),
+        _ => None,
+    }
+}
+
+fn delete_secret_secure(tenant_id: &str, client_id: &str) {
+    if let Ok(entry) = Entry::new(SECRET_SERVICE, &secret_account(tenant_id, client_id)) {
+        let _ = entry.delete_credential();
+    }
+}
 
 fn split_for_windows_keyring(input: &str, max_utf16_units: usize) -> Vec<String> {
     let mut chunks = Vec::new();
@@ -159,11 +192,15 @@ async fn load_config(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<
     }
 
     let text = std::fs::read_to_string(&path).map_err(|e| format!("Lecture de la configuration : {e}"))?;
-    let cfg: AppConfig = serde_json::from_str(&text).map_err(|e| format!("Configuration invalide : {e}"))?;
+    let mut cfg: AppConfig = serde_json::from_str(&text).map_err(|e| format!("Configuration invalide : {e}"))?;
+
+    // Récupération du secret depuis le coffre-fort système (jamais stocké sur disque).
+    let secret = load_secret_secure(&cfg.tenant_id, &cfg.client_id);
+    cfg.client_secret = secret.clone();
 
     *state.tenant_id.lock().await = cfg.tenant_id.clone();
     *state.client_id.lock().await = cfg.client_id.clone();
-    *state.client_secret.lock().await = cfg.client_secret.clone().unwrap_or_default();
+    *state.client_secret.lock().await = secret.unwrap_or_default();
 
     match load_token_secure(&cfg.tenant_id, &cfg.client_id) {
         Ok(Some(refresh)) => {
@@ -192,18 +229,34 @@ async fn save_config(app: AppHandle, config: AppConfig, state: State<'_, Arc<App
         std::fs::create_dir_all(parent).map_err(|e| format!("Création du dossier de configuration : {e}"))?;
     }
 
+    // client_secret est skip_serializing → jamais écrit dans le fichier JSON.
     let text = serde_json::to_string_pretty(&config).map_err(|e| format!("Sérialisation de la configuration : {e}"))?;
     std::fs::write(&path, text).map_err(|e| format!("Ecriture de la configuration : {e}"))?;
 
     let old_tenant = state.tenant_id.lock().await.clone();
     let old_client = state.client_id.lock().await.clone();
-    if !old_tenant.is_empty() && !old_client.is_empty() && (old_tenant != config.tenant_id || old_client != config.client_id) {
+    let tenant_changed = !old_tenant.is_empty() && !old_client.is_empty()
+        && (old_tenant != config.tenant_id || old_client != config.client_id);
+    if tenant_changed {
         let _ = delete_token_secure(&old_tenant, &old_client);
+        delete_secret_secure(&old_tenant, &old_client);
         *state.token.lock().await = None;
     }
 
-    *state.tenant_id.lock().await = config.tenant_id;
-    *state.client_id.lock().await = config.client_id;
+    // Stocker / supprimer le client_secret dans le coffre-fort système.
+    match &config.client_secret {
+        Some(s) if !s.trim().is_empty() => {
+            save_secret_secure(&config.tenant_id, &config.client_id, s.trim())?;
+            logger::info("Client secret enregistré dans le coffre-fort système.");
+        }
+        _ => {
+            // Si le champ est vide, on supprime l'entrée existante (l'utilisateur a effacé le secret).
+            delete_secret_secure(&config.tenant_id, &config.client_id);
+        }
+    }
+
+    *state.tenant_id.lock().await = config.tenant_id.clone();
+    *state.client_id.lock().await = config.client_id.clone();
     *state.client_secret.lock().await = config.client_secret.clone().unwrap_or_default();
     logger::info("Configuration enregistrée.");
     Ok(())
@@ -380,11 +433,11 @@ async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: Stri
 
 /// Retourne des infos de diagnostic : PS exe utilisé + chemin du log.
 #[tauri::command]
-fn get_ps_info(app: tauri::AppHandle) -> String {
+fn get_ps_info() -> String {
     let exe = graph::ps_exe_name();
-    let log_path = app.path().app_log_dir()
-        .map(|p| p.join("teams-manager.log").display().to_string())
-        .unwrap_or_else(|_| "chemin log inconnu".into());
+    let log_path = logger::current_path()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "chemin log inconnu".into());
     format!("Exe PS : {exe} | Log : {log_path}")
 }
 
@@ -392,15 +445,32 @@ fn get_ps_info(app: tauri::AppHandle) -> String {
 #[tauri::command]
 fn open_log_file(app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let path = app.path().app_log_dir()
-        .map(|p| p.join("teams-manager.log"))
-        .map_err(|e| e.to_string())?;
-    // Crée le fichier s'il n'existe pas encore
+    let path = logger::current_path().ok_or("Chemin du fichier de log non disponible.")?;
     if !path.exists() {
         std::fs::write(&path, "").map_err(|e| e.to_string())?;
     }
     app.opener().open_path(path.to_string_lossy().as_ref(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Ouvre un sélecteur de dossier et retourne le chemin choisi.
+#[tauri::command]
+async fn pick_log_folder(app: AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let folder = app
+        .dialog()
+        .file()
+        .blocking_pick_folder()
+        .ok_or("Sélection annulée.")?;
+    Ok(folder.to_string())
+}
+
+/// Retourne le chemin actuel du fichier de log (pour l'affichage dans les paramètres).
+#[tauri::command]
+fn get_log_path() -> String {
+    logger::current_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -424,7 +494,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(|app| {
-            let log_path = logger::init(app.handle())?;
+            // Charger la config pour récupérer un éventuel chemin de log personnalisé.
+            let custom_log = (|| {
+                let cfg_path = app.handle().path().app_config_dir().ok()?.join("config.json");
+                let text = std::fs::read_to_string(cfg_path).ok()?;
+                let cfg: serde_json::Value = serde_json::from_str(&text).ok()?;
+                cfg.get("log_path")?.as_str().map(|s| s.to_string())
+            })();
+            let log_path = logger::init(app.handle(), custom_log.as_deref())?;
             logger::info(&format!("Fichier de log : {}", log_path.display()));
 
             // Windows : vérification et installation silencieuse du module PowerShell MicrosoftTeams.
@@ -455,6 +532,8 @@ pub fn run() {
             install_ps_module,
             get_ps_info,
             open_log_file,
+            pick_log_folder,
+            get_log_path,
             log_frontend_error,
         ])
         .run(tauri::generate_context!())

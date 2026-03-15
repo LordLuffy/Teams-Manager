@@ -138,6 +138,7 @@ pub struct UserLicense {
     pub sku_part_number: String,
     pub friendly_name: String,
     pub account_enabled: String,
+    pub user_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -222,6 +223,7 @@ pub struct DirectoryUser {
     pub licenses: String,
     pub phone_number: String,
     pub has_phone_license: String,
+    pub user_type: String,
 }
 
 async fn fetch_pages(client: &Client, token: &str, url: &str) -> Result<Vec<Value>, String> {
@@ -921,7 +923,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
         }
     }
 
-    let user_url = format!("{V1}/users?$select=id,displayName,userPrincipalName,businessPhones,assignedLicenses,accountEnabled,usageLocation&$top=999");
+    let user_url = format!("{V1}/users?$select=id,displayName,userPrincipalName,businessPhones,assignedLicenses,accountEnabled,usageLocation,userType&$top=999");
     match fetch_pages(client, token, &user_url).await {
         Err(e) => data.errors.push(format!("Utilisateurs : {e}")),
         Ok(users) => {
@@ -952,6 +954,14 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 let phone_license_names = lic_skus.iter().filter(|s| is_phone_related_sku(s)).map(|s| friendly_sku(s).to_string()).collect::<Vec<_>>();
                 let phone_number_display = if phones.is_empty() { "-".into() } else { dedup_keep_order(phones.clone()).join(", ") };
 
+                // userType : "Guest" = externe, "Member" (ou absent) = interne
+                let raw_user_type = str_val(u, "userType");
+                let user_type_display: String = if raw_user_type.eq_ignore_ascii_case("Guest") {
+                    "Externe".into()
+                } else {
+                    "Interne".into()
+                };
+
                 for sku in &lic_skus {
                     data.user_licenses.push(UserLicense {
                         display_name: name.clone(),
@@ -959,6 +969,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                         sku_part_number: sku.clone(),
                         friendly_name: friendly_sku(sku).to_string(),
                         account_enabled: if enabled { "Oui".into() } else { "Non".into() },
+                        user_type: user_type_display.clone(),
                     });
                 }
 
@@ -970,6 +981,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                     licenses: license_names.join(", "),
                     phone_number: phone_number_display.clone(),
                     has_phone_license: if phone_license_names.is_empty() { "Non".into() } else { "Oui".into() },
+                    user_type: user_type_display,
                 });
 
                 if !assigned_phones.is_empty() {

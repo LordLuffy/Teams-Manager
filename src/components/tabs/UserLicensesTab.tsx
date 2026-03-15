@@ -4,10 +4,20 @@ import type { UserLicense } from "../../types";
 
 interface Props { data: UserLicense[]; }
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, borderRadius: "50%", border: "1.5px solid var(--info)", color: "var(--info)", fontSize: 9, fontWeight: 700, flexShrink: 0, cursor: "help", lineHeight: 1 }}
+    >i</span>
+  );
+}
+
 interface UserGroup {
   displayName: string;
   upn: string;
   accountEnabled: string;
+  userType: string;
   licenses: UserLicense[];
 }
 
@@ -24,6 +34,7 @@ export default function UserLicensesTab({ data }: Props) {
           displayName: item.displayName,
           upn: item.upn,
           accountEnabled: item.accountEnabled,
+          userType: item.userType,
           licenses: [],
         });
       }
@@ -110,6 +121,12 @@ export default function UserLicensesTab({ data }: Props) {
 
   return (
     <div>
+      {/* Bandeau d'information */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 14 }}>
+        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+          Vue groupée par utilisateur. Cliquez sur une ligne pour voir le détail des licences attribuées. Les utilisateurs <strong>externes</strong> (invités Azure AD B2B) sont identifiés par le badge <em>Externe</em>.
+        </p>
+      </div>
       {/* Barre d'outils */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -180,13 +197,11 @@ export default function UserLicensesTab({ data }: Props) {
                   <th>Nom</th>
                   <th>UPN</th>
                   <th style={{ textAlign: "center" }}>Nb licences</th>
+                  <th title="Interne = membre de l'organisation. Externe = utilisateur invité (Azure AD B2B).">Type</th>
                   <th>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                       Compte actif
-                      <span
-                        title="Indique si le compte Microsoft 365 de l'utilisateur est activé dans Azure Active Directory. Un compte inactif ne peut plus se connecter aux services Microsoft."
-                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", background: "rgba(96,165,250,0.18)", color: "var(--info)", fontSize: 9, fontWeight: 700, flexShrink: 0, cursor: "help" }}
-                      >ⓘ</span>
+                      <InfoTip text="Indique si le compte Microsoft 365 de l'utilisateur est activé dans Azure Active Directory. Un compte inactif ne peut plus se connecter aux services Microsoft." />
                     </span>
                   </th>
                 </tr>
@@ -215,6 +230,11 @@ export default function UserLicensesTab({ data }: Props) {
                         <td style={{ color: "var(--text-2)", fontSize: 12 }}>{group.upn}</td>
                         <td style={{ textAlign: "center" }}>
                           <span className="badge">{group.licenses.length}</span>
+                        </td>
+                        <td>
+                          {group.userType === "Externe"
+                            ? <span className="badge badge-warning">Externe</span>
+                            : <span className="badge badge-neutral">Interne</span>}
                         </td>
                         <td>
                           <span className={`badge ${group.accountEnabled === "Oui" ? "badge-success" : "badge-danger"}`}>

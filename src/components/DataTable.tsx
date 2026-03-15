@@ -153,8 +153,8 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
                           <span
                             title={col.tooltip}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", background: "rgba(96,165,250,0.18)", color: "var(--info)", fontSize: 9, fontWeight: 700, flexShrink: 0, cursor: "help", lineHeight: 1 }}
-                          >ⓘ</span>
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, borderRadius: "50%", border: "1.5px solid var(--info)", color: "var(--info)", fontSize: 9, fontWeight: 700, flexShrink: 0, cursor: "help", lineHeight: 1 }}
+                          >i</span>
                         )}
                         {sortKey === col.key && <span style={{ opacity: 0.7 }}>{sortAsc ? "▲" : "▼"}</span>}
                       </span>

@@ -157,7 +157,11 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
           })}
         </nav>
 
-        <div style={{ padding: "10px 8px 14px", borderTop: "1px solid var(--border)" }}>
+        <div style={{ padding: "10px 8px 14px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={onSetup}>
+            <SettingsIcon />
+            Paramètres
+          </button>
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={onDisconnect}>
             <LogoutIcon />
             Déconnexion

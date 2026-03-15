@@ -21,14 +21,9 @@ Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visua
 | Prérequis | Pourquoi | Installation |
 |-----------|----------|--------------|
 | **PowerShell 7** (`pwsh`) | Le module MicrosoftTeams v5+ embarque des DLL .NET 8 incompatibles avec PowerShell 5.1 (Windows built-in) | [aka.ms/powershell](https://aka.ms/powershell) |
-| **Module PowerShell MicrosoftTeams** | Récupération des Files d'attente et Auto Attendants via `Get-CsCallQueue` / `Get-CsAutoAttendant` | Installé automatiquement par l'application au démarrage |
+| **Module PowerShell MicrosoftTeams** | Récupération des Files d'attente et Standards automatiques via `Get-CsCallQueue` / `Get-CsAutoAttendant` | Installé automatiquement par l'application au démarrage |
 
-> **Note OneDrive** : Si votre dossier `Documents` est synchronisé par OneDrive, le module Teams PS peut être installé sous `OneDrive\Documents\PowerShell\Modules`. En cas d'erreur "Accès refusé", installez manuellement depuis une session PowerShell 7 admin :
-> ```powershell
-> Install-Module MicrosoftTeams -Scope AllUsers
-> ```
-
-> **Détection automatique** : L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Auto Attendants.
+> **Détection automatique** : L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Standards automatiques.
 
 ---
 
@@ -67,29 +62,14 @@ TeamsAnalysis/
     └── Cargo.toml
 ```
 
-### Frontend
+### Fichiers de données
 
-- `src/App.tsx` : orchestration setup / auth / dashboard
-- `src/components/Dashboard.tsx` : navigation, bannière module PS, synthèse alertes
-- `src/components/DataTable.tsx` : recherche, tri, pagination, export CSV
-- `src/components/tabs/*` : vues métier
+| Fichier | Emplacement Windows |
+|---------|---------------------|
+| Configuration | `%APPDATA%\com.teams-manager.app\config.json` |
+| Logs | `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log` |
 
-### Backend
-
-- `src-tauri/src/lib.rs` : commandes Tauri, persistance locale, sécurité token
-- `src-tauri/src/auth.rs` : device code flow Microsoft + tentative token Teams service
-- `src-tauri/src/graph.rs` : collecte Graph API + scripts PowerShell embarqués (CQ/AA)
-- `src-tauri/src/logger.rs` : logs applicatifs fichier
-
-### Fichier de configuration
-
-Stocké dans le répertoire de config de l'application :
-- Windows : `%APPDATA%\com.teams-manager.app\config.json`
-
-### Fichier de log
-
-- Windows : `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
-  (`C:\Users\<nom>\AppData\**Local**\com.teams-manager.app\logs\teams-manager.log`)
+> Le **Client Secret** Azure AD n'est jamais écrit dans `config.json` — il est stocké de façon sécurisée dans le **Gestionnaire d'informations d'identification Windows** (keyring).
 
 ---
 
@@ -113,21 +93,11 @@ Les onglets **Files d'attente** et **Standards automatiques** utilisent le modul
 | `Get-CsCallQueue` | Files d'attente Teams |
 | `Get-CsAutoAttendant` | Standards automatiques |
 
-**Authentification** : le module PowerShell MicrosoftTeams v7.x ne supporte plus l'authentification déléguée non-interactive. L'application utilise le flux `client_credentials` (app-only) qui nécessite un **Client Secret** Azure AD. Voir la section 5 pour la configuration complète.
+**Authentification** : le module PowerShell MicrosoftTeams v7.x utilise le flux `client_credentials` (app-only), qui nécessite un **Client Secret** Azure AD. Voir la section 5 pour la configuration complète.
 
 ---
 
-## 4. Journalisation
-
-Les logs sont écrits dans le dossier standard de l'application :
-
-- **Windows** : `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
-
-Nom du fichier : `teams-manager.log`
-
----
-
-## 5. Azure AD
+## 4. Azure AD
 
 ### Permissions Microsoft Graph attendues
 
@@ -155,14 +125,14 @@ Les cmdlets PowerShell `Get-CsCallQueue` / `Get-CsAutoAttendant` nécessitent un
 
 1. Dans votre App Registration → **Certificates & secrets** → New client secret → copiez la valeur
 2. **API permissions** → Microsoft Graph → **Application** → ajoutez `Organization.Read.All` → Grant admin consent
-3. **Microsoft Entra ID** (niveau tenant, pas l'App Registration) → **Rôles et administrateurs** → cherchez **Teams Administrator** → **Add assignments** → ajoutez votre application
+3. **Microsoft Entra ID** (niveau tenant) → **Rôles et administrateurs** → cherchez **Teams Administrator** → **Add assignments** → ajoutez votre application
 4. Dans l'application Teams Manager → écran **Configuration** → collez le Client Secret dans le champ prévu
 
 > **Important** : L'assignation du rôle Teams Administrator se fait dans **Microsoft Entra ID → Rôles et administrateurs** (niveau tenant), et non dans les Rôles de l'App Registration. Aucune licence Entra ID Premium n'est requise pour assigner un rôle administrateur intégré.
 
 ---
 
-## 6. Build
+## 5. Build
 
 ### Développement
 
@@ -187,7 +157,7 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 
 ---
 
-## 7. Utilisation
+## 6. Utilisation
 
 1. Au premier lancement : saisir le **Tenant ID** et le **Client ID** Azure AD
 2. Cliquer **Se connecter avec Microsoft** → suivre les instructions du code appareil sur `aka.ms/devicelogin`
@@ -201,14 +171,11 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 | Symptôme | Cause probable | Solution |
 |----------|----------------|----------|
 | "PowerShell 7 requis" | `pwsh.exe` absent | Installer [PowerShell 7](https://aka.ms/powershell) |
-| "Client Secret requis" | Aucun secret configuré | Voir section 5 — Paramétrage avancé |
+| "Client Secret requis" | Aucun secret configuré | Voir section 4 — Paramétrage avancé |
 | `Authorization_RequestDenied` | Permission Application `Organization.Read.All` manquante | Ajouter la permission Application dans Azure + Grant consent |
 | `Authorization_RequestDenied` | Rôle Teams Administrator non assigné à l'application | Assigner le rôle dans **Microsoft Entra ID → Rôles et administrateurs** |
 | 0 résultats sans erreur | `Get-CsCallQueue` retourne vide | Vérifier que le compte a des droits Teams admin |
 | Bannière orange persistante après configuration | Secret incorrect ou permissions non consenties | Vérifier les permissions et le consentement admin dans Azure |
 
-### Journalisation
-
-Un bouton **Voir les logs** est disponible dans la bannière de statut des onglets CQ/AA. Les logs sont accessibles manuellement dans :
-
-- `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
+Les logs sont accessibles via le bouton **Voir les logs** dans la bannière de statut, ou manuellement dans :
+`%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`

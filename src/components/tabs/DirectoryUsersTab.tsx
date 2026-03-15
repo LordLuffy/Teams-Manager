@@ -10,9 +10,21 @@ const badgeOuiNon = (value: unknown) => {
   return <span className={`badge ${text === "Oui" ? "badge-success" : "badge-danger"}`}>{text}</span>;
 };
 
+const userTypeBadge = (value: unknown) => {
+  const text = String(value);
+  if (text === "Externe") return <span className="badge badge-warning">Externe</span>;
+  return <span className="badge badge-neutral">Interne</span>;
+};
+
 const columns: Column<DirectoryUser>[] = [
   { key: "displayName", label: "Nom" },
   { key: "upn", label: "UPN" },
+  {
+    key: "userType",
+    label: "Type",
+    tooltip: "Interne = membre de l'organisation (userType: Member). Externe = utilisateur invité (userType: Guest), généralement un collaborateur externe ajouté via Azure AD B2B.",
+    render: userTypeBadge,
+  },
   { key: "phoneNumber", label: "Numéro détecté" },
   {
     key: "hasPhoneLicense",

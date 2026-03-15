@@ -33,10 +33,17 @@ const columns: Column<CallQueue>[] = [
 
 export default function CallQueuesTab({ data }: Props) {
   return (
-    <DataTable<CallQueue>
-      columns={columns}
-      data={data}
-      exportFilename="call_queues.csv"
-    />
+    <>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>
+        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+          Les <strong>files d'attente</strong> distribuent les appels entrants à un groupe d'agents selon une méthode de routage définie. Données récupérées via le module PowerShell <code style={{ fontSize: 11 }}>MicrosoftTeams</code> (<code style={{ fontSize: 11 }}>Get-CsCallQueue</code>).
+        </p>
+      </div>
+      <DataTable<CallQueue>
+        columns={columns}
+        data={data}
+        exportFilename="call_queues.csv"
+      />
+    </>
   );
 }

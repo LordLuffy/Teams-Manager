@@ -4,6 +4,7 @@ export interface AppConfig {
   tenant_id: string;
   client_id: string;
   client_secret?: string;
+  log_path?: string;
 }
 
 export interface DeviceCodeResult {
@@ -39,6 +40,7 @@ export interface UserLicense {
   skuPartNumber: string;
   friendlyName: string;
   accountEnabled: string;
+  userType: string;
 }
 
 export interface Subscription {
@@ -95,6 +97,7 @@ export interface DirectoryUser {
   licenses: string;
   phoneNumber: string;
   hasPhoneLicense: string;
+  userType: string;
 }
 
 export interface DashboardData {

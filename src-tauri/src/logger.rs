@@ -1,8 +1,10 @@
-use std::{fs::OpenOptions, io::Write, path::PathBuf, sync::{Mutex, OnceLock}, time::{SystemTime, UNIX_EPOCH}};
+use std::{fs::OpenOptions, io::Write, path::PathBuf, sync::{Mutex, OnceLock, RwLock}, time::{SystemTime, UNIX_EPOCH}};
 use tauri::AppHandle;
 use tauri::Manager;
 
-static LOG_FILE_PATH: OnceLock<PathBuf> = OnceLock::new();
+/// Chemin du fichier de log. Initialisé une seule fois, puis potentiellement
+/// remplacé par un chemin personnalisé via `set_custom_path`.
+static LOG_FILE_PATH: OnceLock<RwLock<PathBuf>> = OnceLock::new();
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 fn timestamp() -> String {
@@ -13,28 +15,55 @@ fn timestamp() -> String {
     format!("{}", now)
 }
 
-pub fn init(app: &AppHandle) -> Result<PathBuf, String> {
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e| format!("Impossible de localiser le dossier de logs : {e}"))?;
+pub fn init(app: &AppHandle, custom_path: Option<&str>) -> Result<PathBuf, String> {
+    let path = if let Some(cp) = custom_path.filter(|s| !s.trim().is_empty()) {
+        // Chemin personnalisé : utiliser le dossier fourni par l'utilisateur.
+        let dir = PathBuf::from(cp.trim());
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Impossible de créer le dossier de logs personnalisé : {e}"))?;
+        dir.join("teams-manager.log")
+    } else {
+        let log_dir = app
+            .path()
+            .app_log_dir()
+            .map_err(|e| format!("Impossible de localiser le dossier de logs : {e}"))?;
+        std::fs::create_dir_all(&log_dir)
+            .map_err(|e| format!("Impossible de créer le dossier de logs : {e}"))?;
+        log_dir.join("teams-manager.log")
+    };
 
-    std::fs::create_dir_all(&log_dir)
-        .map_err(|e| format!("Impossible de créer le dossier de logs : {e}"))?;
-
-    let path = log_dir.join("teams-manager.log");
-    let _ = LOG_FILE_PATH.set(path.clone());
+    let _ = LOG_FILE_PATH.set(RwLock::new(path.clone()));
     info("Journalisation initialisée.");
     Ok(path)
 }
 
-fn append(level: &str, message: &str) {
-    let Some(path) = LOG_FILE_PATH.get() else {
-        return;
-    };
+/// Met à jour le chemin du fichier de log à chaud (sans redémarrage).
+pub fn set_custom_path(dir: &str) -> Result<PathBuf, String> {
+    let dir_path = PathBuf::from(dir.trim());
+    std::fs::create_dir_all(&dir_path)
+        .map_err(|e| format!("Impossible de créer le dossier de logs : {e}"))?;
+    let path = dir_path.join("teams-manager.log");
+    if let Some(lock) = LOG_FILE_PATH.get() {
+        if let Ok(mut w) = lock.write() {
+            *w = path.clone();
+        }
+    }
+    Ok(path)
+}
 
+/// Retourne le chemin actuel du fichier de log.
+pub fn current_path() -> Option<PathBuf> {
+    LOG_FILE_PATH.get()?.read().ok().map(|g| g.clone())
+}
+
+fn append(level: &str, message: &str) {
+    let Some(lock) = LOG_FILE_PATH.get() else { return };
+    let path = match lock.read() {
+        Ok(g) => g.clone(),
+        Err(_) => return,
+    };
     let _guard = WRITE_LOCK.lock().ok();
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "[{}] [{}] {}", timestamp(), level, message);
     }
 }
