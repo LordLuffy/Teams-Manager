@@ -530,6 +530,18 @@ async fn export_csv(headers: Vec<String>, rows: Vec<Vec<String>>, filename: Stri
 
 // ─── Commandes utilitaires ───────────────────────────────────────────────────
 
+/// Retourne la plateforme courante ("windows", "macos", "linux").
+#[tauri::command]
+fn get_platform() -> String {
+    if cfg!(target_os = "windows") {
+        "windows".into()
+    } else if cfg!(target_os = "macos") {
+        "macos".into()
+    } else {
+        "linux".into()
+    }
+}
+
 /// Retourne des infos de diagnostic : exe PS utilisé + chemin du log.
 #[tauri::command]
 fn get_ps_info() -> String {
@@ -631,6 +643,7 @@ pub fn run() {
             export_csv,
             install_ps_module,
             get_ps_info,
+            get_platform,
             open_log_file,
             pick_log_folder,
             get_log_path,

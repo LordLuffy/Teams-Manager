@@ -12,21 +12,36 @@ interface Props<T extends object> {
   columns: Column<T>[];
   data: T[] | null;
   exportFilename: string;
+  /** Si fourni, un bouton ▶/▼ apparaît sur chaque ligne pour afficher le contenu retourné. */
+  expandRow?: (row: T) => React.ReactNode;
 }
 
 const PAGE_SIZE = 50;
 
-export default function DataTable<T extends object>({ columns, data, exportFilename }: Props<T>) {
+export default function DataTable<T extends object>({ columns, data, exportFilename, expandRow }: Props<T>) {
   const defaultSortKey = columns[0]?.key ?? null;
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey);
   const [sortAsc, setSortAsc] = useState(true);
   const [page, setPage] = useState(1);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  function toggleExpand(idx: number) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
 
   useEffect(() => {
     setSortKey(defaultSortKey);
     setSortAsc(true);
   }, [defaultSortKey]);
+
+  // Fermer toutes les lignes développées lors d'un changement de données
+  useEffect(() => { setExpandedRows(new Set()); }, [data]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -145,6 +160,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
             <table className="data-table">
               <thead>
                 <tr>
+                  {expandRow && <th style={{ width: 32, padding: "0 6px" }} />}
                   {columns.map((col) => (
                     <th key={col.key} onClick={() => handleSort(col.key)}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -163,15 +179,40 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
                 </tr>
               </thead>
               <tbody>
-                {pageData.map((row, ri) => (
-                  <tr key={ri}>
-                    {columns.map((col) => (
-                      <td key={col.key} title={String(row[col.key as keyof T] ?? "")}>
-                        {col.render ? col.render(row[col.key as keyof T], row) : String(row[col.key as keyof T] ?? "")}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {pageData.map((row, ri) => {
+                  const globalIdx = (page - 1) * PAGE_SIZE + ri;
+                  const expanded = expandedRows.has(globalIdx);
+                  return (
+                    <>
+                      <tr key={ri}>
+                        {expandRow && (
+                          <td style={{ width: 32, padding: "0 6px", textAlign: "center" }}>
+                            <button
+                              onClick={() => toggleExpand(globalIdx)}
+                              title={expanded ? "Réduire" : "Détails"}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, padding: "2px 4px", borderRadius: 3, transition: "color .15s" }}
+                            >{expanded ? "▼" : "▶"}</button>
+                          </td>
+                        )}
+                        {columns.map((col) => (
+                          <td key={col.key} title={String(row[col.key as keyof T] ?? "")}>
+                            {col.render ? col.render(row[col.key as keyof T], row) : String(row[col.key as keyof T] ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                      {expandRow && expanded && (
+                        <tr key={`${ri}-exp`}>
+                          <td
+                            colSpan={columns.length + 1}
+                            style={{ background: "var(--bg-primary)", padding: "10px 16px 10px 40px", borderTop: "1px solid var(--border)" }}
+                          >
+                            {expandRow(row)}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>

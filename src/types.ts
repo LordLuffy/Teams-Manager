@@ -59,10 +59,20 @@ export interface CallQueue {
   language: string;
   routingMethod: string;
   agentCount: number;
+  /** Noms d'affichage des agents individuels (enrichis depuis le répertoire Graph). */
+  agents: string[];
+  /** IDs ou noms des listes/groupes de distribution. */
+  distributionLists: string[];
   timeoutAction: string;
   overflowAction: string;
   phoneNumber: string;
   canBeDeleted: string;
+}
+
+export interface DayHours {
+  day: string;
+  /** Plage(s) horaire(s) au format "HH:MM - HH:MM", ou "Fermee" si fermé. */
+  hours: string;
 }
 
 export interface AutoAttendant {
@@ -72,6 +82,16 @@ export interface AutoAttendant {
   phoneNumber: string;
   status: string;
   canBeDeleted: string;
+  /** Nombre de comptes ressources liés. */
+  resourceAccountCount: number;
+  /** Nombre de comptes ressources liés et licenciés. */
+  resourceAccountLicensedCount: number;
+  /** Résumé du flux d'appels par défaut (heures ouvrées). */
+  defaultCallFlow: string;
+  /** Résumé du flux hors heures ouvrées. */
+  afterHoursCallFlow: string;
+  /** Horaires d'ouverture hebdomadaires (lun–dim). */
+  businessHours: DayHours[];
 }
 
 export interface ResourceAccount {
@@ -123,6 +143,7 @@ export type TabId =
   | "subscriptions"
   | "callQueues"
   | "autoAttendants"
-  | "resourceAccounts";
+  | "resourceAccounts"
+  | "cartographie";
 
 export type AppScreen = "setup" | "settings" | "auth" | "dashboard";

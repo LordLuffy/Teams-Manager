@@ -16,14 +16,16 @@ Application desktop **Tauri 2 + React + TypeScript + Rust** pour auditer les lic
 
 Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visual C++ Build Tools.
 
-### Prérequis runtime (utilisateur final — Windows uniquement)
+### Prérequis runtime (onglets Files d'attente & Standards automatiques)
 
 | Prérequis | Pourquoi | Installation |
 |-----------|----------|--------------|
 | **PowerShell 7** (`pwsh`) | Le module MicrosoftTeams v5+ embarque des DLL .NET 8 incompatibles avec PowerShell 5.1 (Windows built-in) | [aka.ms/powershell](https://aka.ms/powershell) |
 | **Module PowerShell MicrosoftTeams** | Récupération des Files d'attente et Standards automatiques via `Get-CsCallQueue` / `Get-CsAutoAttendant` | Installé automatiquement par l'application au démarrage |
 
-> **Détection automatique** : L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Standards automatiques.
+> **Windows** : L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Standards automatiques.
+>
+> **macOS** : L'application est compatible macOS pour tous les onglets Graph API. Les onglets Files d'attente et Standards automatiques nécessitent [PowerShell Core (`pwsh`)](https://github.com/PowerShell/PowerShell/releases) et le module MicrosoftTeams installés manuellement.
 
 ---
 
@@ -66,8 +68,8 @@ TeamsAnalysis/
 
 | Donnée | Emplacement |
 |--------|-------------|
-| Chemin de logs personnalisé | `%APPDATA%\com.teams-manager.app\config.json` (seul champ non-sensible) |
-| Logs applicatifs | `%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log` (par défaut) |
+| Chemin de logs personnalisé | Windows : `%APPDATA%\com.teams-manager.desktop\config.json` / macOS : `~/Library/Application Support/com.teams-manager.desktop/config.json` |
+| Logs applicatifs | Windows : `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log` / macOS : `~/Library/Logs/com.teams-manager.desktop/teams-manager.log` |
 | **Tenant ID, Client ID, Client Secret** | **Gestionnaire d'informations d'identification Windows** (chiffré, jamais sur disque en clair) |
 | Refresh token Microsoft | **Gestionnaire d'informations d'identification Windows** (chiffré, découpé en segments) |
 
@@ -191,4 +193,5 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 | Bannière orange persistante après configuration | Secret incorrect ou permissions non consenties | Vérifier les permissions et le consentement admin dans Azure |
 
 Les logs sont accessibles via le bouton **Voir les logs** dans la sidebar, ou manuellement dans :
-`%LOCALAPPDATA%\com.teams-manager.app\logs\teams-manager.log`
+- Windows : `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log`
+- macOS : `~/Library/Logs/com.teams-manager.desktop/teams-manager.log`

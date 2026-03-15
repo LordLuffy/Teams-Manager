@@ -161,10 +161,21 @@ pub struct CallQueue {
     pub language: String,
     pub routing_method: String,
     pub agent_count: i64,
+    /// Noms d'affichage des agents individuels (enrichis depuis le répertoire Graph).
+    pub agents: Vec<String>,
+    /// IDs des listes/groupes de distribution.
+    pub distribution_lists: Vec<String>,
     pub timeout_action: String,
     pub overflow_action: String,
     pub phone_number: String,
     pub can_be_deleted: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DayHours {
+    pub day: String,
+    pub hours: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -176,6 +187,19 @@ pub struct AutoAttendant {
     pub phone_number: String,
     pub status: String,
     pub can_be_deleted: String,
+    /// Nombre de comptes ressources liés (depuis ApplicationInstances PS).
+    pub resource_account_count: i64,
+    /// Nombre de comptes ressources liés et licenciés.
+    pub resource_account_licensed_count: i64,
+    /// Résumé du flux d'appels par défaut (heures ouvrées).
+    pub default_call_flow: String,
+    /// Résumé du flux d'appels hors heures ouvrées.
+    pub after_hours_call_flow: String,
+    /// Horaires d'ouverture hebdomadaires (lun–dim).
+    pub business_hours: Vec<DayHours>,
+    /// ObjectIds / UPNs des comptes ressources liés — usage interne, non sérialisé vers le frontend.
+    #[serde(skip_serializing)]
+    pub application_instances: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -354,36 +378,45 @@ where
 
 fn merge_resource_based_queues(data: &mut DashboardData) {
     let existing: std::collections::HashSet<String> = data.call_queues.iter().map(|q| lower(&q.name)).collect();
-    for ra in data.resource_accounts.iter().filter(|r| r.account_type == "Call Queue") {
-        if !existing.contains(&lower(&ra.display_name)) {
-            data.call_queues.push(CallQueue {
-                name: ra.display_name.clone(),
-                language: "N/A".into(),
-                routing_method: "N/A".into(),
-                agent_count: 0,
-                timeout_action: "N/A".into(),
-                overflow_action: "N/A".into(),
-                phone_number: ra.phone_number.clone(),
-                can_be_deleted: String::new(),
-            });
-        }
-    }
+    let new_cqs: Vec<CallQueue> = data.resource_accounts.iter()
+        .filter(|r| r.account_type == "Call Queue" && !existing.contains(&lower(&r.display_name)))
+        .map(|ra| CallQueue {
+            name: ra.display_name.clone(),
+            language: "N/A".into(),
+            routing_method: "N/A".into(),
+            agent_count: 0,
+            agents: Vec::new(),
+            distribution_lists: Vec::new(),
+            timeout_action: "N/A".into(),
+            overflow_action: "N/A".into(),
+            phone_number: ra.phone_number.clone(),
+            can_be_deleted: String::new(),
+        })
+        .collect();
+    data.call_queues.extend(new_cqs);
 }
 
 fn merge_resource_based_attendants(data: &mut DashboardData) {
     let existing: std::collections::HashSet<String> = data.auto_attendants.iter().map(|q| lower(&q.name)).collect();
-    for ra in data.resource_accounts.iter().filter(|r| r.account_type == "Auto Attendant") {
-        if !existing.contains(&lower(&ra.display_name)) {
-            data.auto_attendants.push(AutoAttendant {
-                name: ra.display_name.clone(),
-                language: "N/A".into(),
-                time_zone: "N/A".into(),
-                phone_number: ra.phone_number.clone(),
-                status: "Actif".into(),
-                can_be_deleted: String::new(),
-            });
-        }
-    }
+    let new_aas: Vec<AutoAttendant> = data.resource_accounts.iter()
+        .filter(|r| r.account_type == "Auto Attendant" && !existing.contains(&lower(&r.display_name)))
+        .map(|ra| AutoAttendant {
+            name: ra.display_name.clone(),
+            language: "N/A".into(),
+            time_zone: "N/A".into(),
+            phone_number: ra.phone_number.clone(),
+            status: "Actif".into(),
+            can_be_deleted: String::new(),
+            resource_account_count: 0,
+            resource_account_licensed_count: 0,
+            default_call_flow: String::new(),
+            after_hours_call_flow: String::new(),
+            business_hours: Vec::new(),
+            // UPN de ce compte ressource — utilisé par compute_resource_account_counts
+            application_instances: vec![ra.upn.clone()],
+        })
+        .collect();
+    data.auto_attendants.extend(new_aas);
 }
 
 /// Complète les numéros de téléphone manquants pour les CQ/AA
@@ -664,15 +697,19 @@ try {
         $rawCqs = Get-CsCallQueue -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
         if ($rawCqs) {
             $cqs = @($rawCqs | ForEach-Object {
-                $lu = if ($_.LineUri) { $_.LineUri -replace '^tel:', '' } else { '-' }
+                $lu         = if ($_.LineUri) { $_.LineUri -replace '^tel:', '' } else { '-' }
+                $agentIds   = @($_.Agents | ForEach-Object { [string]$_.ObjectId })
+                $distLists  = @($_.DistributionLists | ForEach-Object { [string]$_ })
                 @{
-                    name           = [string]$_.Name
-                    language       = if ($_.Language) { [string]$_.Language } else { 'N/A' }
-                    routingMethod  = if ($_.RoutingMethod) { [string]$_.RoutingMethod } else { 'N/A' }
-                    agentCount     = [int]($_.Agents | Measure-Object).Count
-                    timeoutAction  = if ($_.TimeoutAction) { [string]$_.TimeoutAction } else { 'N/A' }
-                    overflowAction = if ($_.OverflowAction) { [string]$_.OverflowAction } else { 'N/A' }
-                    phoneNumber    = $lu
+                    name              = [string]$_.Name
+                    language          = if ($_.Language) { [string]$_.Language } else { 'N/A' }
+                    routingMethod     = if ($_.RoutingMethod) { [string]$_.RoutingMethod } else { 'N/A' }
+                    agentCount        = [int]($_.Agents | Measure-Object).Count
+                    agentIds          = $agentIds
+                    distributionLists = $distLists
+                    timeoutAction     = if ($_.TimeoutAction) { [string]$_.TimeoutAction } else { 'N/A' }
+                    overflowAction    = if ($_.OverflowAction) { [string]$_.OverflowAction } else { 'N/A' }
+                    phoneNumber       = $lu
                 }
             })
         }
@@ -684,12 +721,111 @@ try {
         $rawAas = Get-CsAutoAttendant -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
         if ($rawAas) {
             $aas = @($rawAas | ForEach-Object {
+                # --- Flux d'appels par defaut (heures ouvrees) ---
+                $dfFlow = 'N/A'
+                try {
+                    $menu = $_.DefaultCallFlow.Menu
+                    if ($menu -and $menu.MenuOptions.Count -gt 0) {
+                        $opt    = $menu.MenuOptions[0]
+                        $action = [string]$opt.Action
+                        if ($action -eq 'TransferCallToTarget') {
+                            $ttype = if ($opt.CallTarget) { [string]$opt.CallTarget.Type } else { 'Inconnu' }
+                            $label = switch ($ttype) {
+                                'ApplicationEndpoint'   { 'Compte ressource' }
+                                'User'                  { 'Utilisateur' }
+                                'ExternalPstn'          { 'PSTN externe' }
+                                'ConfigurationEndpoint' { 'Autre standard' }
+                                default                 { $ttype }
+                            }
+                            $dfFlow = "Transferer -> $label"
+                        } elseif ($action -eq 'DisconnectCall') {
+                            $dfFlow = 'Deconnecter'
+                        } else { $dfFlow = $action }
+                    }
+                } catch { $dfFlow = 'N/A' }
+
+                # --- Flux hors heures ouvrees ---
+                $ahFlow = 'N/A'
+                try {
+                    $aha = $_.CallHandlingAssociations |
+                           Where-Object { [string]$_.Type -eq 'AfterHours' } |
+                           Select-Object -First 1
+                    if ($aha) {
+                        $ahCF = $_.CallFlows |
+                                Where-Object { [string]$_.Id -eq [string]$aha.CallFlowId } |
+                                Select-Object -First 1
+                        if ($ahCF -and $ahCF.Menu -and $ahCF.Menu.MenuOptions.Count -gt 0) {
+                            $opt    = $ahCF.Menu.MenuOptions[0]
+                            $action = [string]$opt.Action
+                            if ($action -eq 'TransferCallToTarget') {
+                                $ttype = if ($opt.CallTarget) { [string]$opt.CallTarget.Type } else { 'Inconnu' }
+                                $label = switch ($ttype) {
+                                    'ApplicationEndpoint'   { 'Compte ressource' }
+                                    'User'                  { 'Utilisateur' }
+                                    'ExternalPstn'          { 'PSTN externe' }
+                                    'ConfigurationEndpoint' { 'Autre standard' }
+                                    default                 { $ttype }
+                                }
+                                $ahFlow = "Transferer -> $label"
+                            } elseif ($action -eq 'DisconnectCall') {
+                                $ahFlow = 'Deconnecter'
+                            } else { $ahFlow = $action }
+                        }
+                    }
+                } catch { $ahFlow = 'N/A' }
+
+                $appInst = @($_.ApplicationInstances | ForEach-Object { [string]$_ })
+
+                # --- Horaires d'ouverture hebdomadaires ---
+                $bhList = @()
+                try {
+                    # Méthode 1 : retrouver le planning via l'association BusinessHours
+                    $bhSched = $null
+                    $bhAssoc = $_.CallHandlingAssociations |
+                               Where-Object { [string]$_.Type -eq 'BusinessHours' } |
+                               Select-Object -First 1
+                    if ($bhAssoc -and $bhAssoc.ScheduleId) {
+                        $bhSched = $_.Schedules |
+                                   Where-Object { [string]$_.Id -eq [string]$bhAssoc.ScheduleId } |
+                                   Select-Object -First 1
+                    }
+                    # Méthode 2 : fallback — premier schedule avec WeeklyRecurrentSchedule
+                    if (-not $bhSched) {
+                        foreach ($sc in $_.Schedules) {
+                            if ($sc.WeeklyRecurrentSchedule) { $bhSched = $sc; break }
+                        }
+                    }
+                    if ($bhSched -and $bhSched.WeeklyRecurrentSchedule) {
+                        $wrs    = $bhSched.WeeklyRecurrentSchedule
+                        $days   = @('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')
+                        $daysFr = @('Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')
+                        for ($di = 0; $di -lt 7; $di++) {
+                            $dayProp = $days[$di] + 'Hours'
+                            $ranges  = $wrs.$dayProp
+                            if ($ranges -and $ranges.Count -gt 0) {
+                                $rangeStrs = @($ranges | ForEach-Object {
+                                    $s = '{0:D2}:{1:D2}' -f $_.Start.Hours, $_.Start.Minutes
+                                    $e = '{0:D2}:{1:D2}' -f $_.End.Hours, $_.End.Minutes
+                                    "$s - $e"
+                                })
+                                $bhList += @{ day = $daysFr[$di]; hours = ($rangeStrs -join ' / ') }
+                            } else {
+                                $bhList += @{ day = $daysFr[$di]; hours = 'Fermee' }
+                            }
+                        }
+                    }
+                } catch {}
+
                 @{
-                    name       = [string]$_.Name
-                    language   = if ($_.LanguageId) { [string]$_.LanguageId } else { 'N/A' }
-                    timeZoneId = if ($_.TimeZoneId) { [string]$_.TimeZoneId } else { 'N/A' }
-                    phoneNumber = '-'
-                    status     = 'Actif'
+                    name                 = [string]$_.Name
+                    language             = if ($_.LanguageId) { [string]$_.LanguageId } else { 'N/A' }
+                    timeZoneId           = if ($_.TimeZoneId) { [string]$_.TimeZoneId } else { 'N/A' }
+                    phoneNumber          = '-'
+                    status               = 'Actif'
+                    defaultCallFlow      = $dfFlow
+                    afterHoursCallFlow   = $ahFlow
+                    applicationInstances = $appInst
+                    businessHours        = $bhList
                 }
             })
         }
@@ -697,12 +833,12 @@ try {
 
     # Sérialisation manuelle pour éviter le problème PS5 avec les tableaux à 1 élément
     $cqsJson = if ($cqs.Count -eq 0) { '[]' }
-               elseif ($cqs.Count -eq 1) { '[' + ($cqs[0] | ConvertTo-Json -Compress) + ']' }
-               else { ConvertTo-Json -InputObject $cqs -Depth 3 -Compress }
+               elseif ($cqs.Count -eq 1) { '[' + ($cqs[0] | ConvertTo-Json -Compress -Depth 5) + ']' }
+               else { ConvertTo-Json -InputObject $cqs -Depth 5 -Compress }
 
     $aasJson = if ($aas.Count -eq 0) { '[]' }
-               elseif ($aas.Count -eq 1) { '[' + ($aas[0] | ConvertTo-Json -Compress) + ']' }
-               else { ConvertTo-Json -InputObject $aas -Depth 3 -Compress }
+               elseif ($aas.Count -eq 1) { '[' + ($aas[0] | ConvertTo-Json -Compress -Depth 5) + ']' }
+               else { ConvertTo-Json -InputObject $aas -Depth 5 -Compress }
 
     $cqErrJson      = $cqError       | ConvertTo-Json
     $aaErrJson      = $aaError       | ConvertTo-Json
@@ -824,15 +960,25 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     let mut cqs = Vec::new();
     if let Some(arr) = json.get("callQueues").and_then(|v| v.as_array()) {
         for q in arr {
+            let agents: Vec<String> = q.get("agentIds")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str()).map(|s| s.to_string()).collect())
+                .unwrap_or_default();
+            let distribution_lists: Vec<String> = q.get("distributionLists")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str()).map(|s| s.to_string()).collect())
+                .unwrap_or_default();
             cqs.push(CallQueue {
-                name:            str_val(q, "name"),
-                language:        str_val(q, "language"),
-                routing_method:  str_val(q, "routingMethod"),
-                agent_count:     q.get("agentCount").and_then(|v| v.as_i64()).unwrap_or(0),
-                timeout_action:  str_val(q, "timeoutAction"),
-                overflow_action: str_val(q, "overflowAction"),
-                phone_number:    str_val(q, "phoneNumber"),
-                can_be_deleted:  String::new(),
+                name:               str_val(q, "name"),
+                language:           str_val(q, "language"),
+                routing_method:     str_val(q, "routingMethod"),
+                agent_count:        q.get("agentCount").and_then(|v| v.as_i64()).unwrap_or(0),
+                agents,
+                distribution_lists,
+                timeout_action:     str_val(q, "timeoutAction"),
+                overflow_action:    str_val(q, "overflowAction"),
+                phone_number:       str_val(q, "phoneNumber"),
+                can_be_deleted:     String::new(),
             });
         }
     }
@@ -840,13 +986,31 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     let mut aas = Vec::new();
     if let Some(arr) = json.get("autoAttendants").and_then(|v| v.as_array()) {
         for a in arr {
+            let application_instances: Vec<String> = a.get("applicationInstances")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|x| x.as_str()).map(|s| s.to_string()).collect())
+                .unwrap_or_default();
+            let business_hours: Vec<DayHours> = a.get("businessHours")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|item| {
+                    let day   = item.get("day").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let hours = item.get("hours").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    if day.is_empty() { None } else { Some(DayHours { day, hours }) }
+                }).collect())
+                .unwrap_or_default();
             aas.push(AutoAttendant {
-                name:          str_val(a, "name"),
-                language:      str_val(a, "language"),
-                time_zone:     str_val(a, "timeZoneId"),
-                phone_number:  str_val(a, "phoneNumber"),
-                status:        str_val(a, "status"),
-                can_be_deleted: String::new(),
+                name:                            str_val(a, "name"),
+                language:                        str_val(a, "language"),
+                time_zone:                       str_val(a, "timeZoneId"),
+                phone_number:                    str_val(a, "phoneNumber"),
+                status:                          str_val(a, "status"),
+                can_be_deleted:                  String::new(),
+                resource_account_count:          0, // calculé dans compute_resource_account_counts
+                resource_account_licensed_count: 0,
+                default_call_flow:               str_val(a, "defaultCallFlow"),
+                after_hours_call_flow:           str_val(a, "afterHoursCallFlow"),
+                business_hours,
+                application_instances,
             });
         }
     }
@@ -854,10 +1018,85 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     Ok((cqs, aas, diagnostics))
 }
 
+/// Remplace les ObjectIds d'agents (GUID AAD) par les noms d'affichage correspondants.
+/// Les IDs non résolus sont conservés sous forme abrégée (8 premiers caractères + "…").
+fn enrich_agents(
+    call_queues: &mut [CallQueue],
+    user_id_to_name: &std::collections::HashMap<String, String>,
+) {
+    for cq in call_queues.iter_mut() {
+        cq.agents = cq.agents.iter().map(|id| {
+            user_id_to_name.get(id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    let s: String = id.chars().take(8).collect();
+                    if id.len() > 8 { format!("{s}…") } else { s }
+                })
+        }).collect();
+    }
+}
+
+fn enrich_distribution_lists(
+    call_queues: &mut [CallQueue],
+    group_id_to_name: &std::collections::HashMap<String, String>,
+) {
+    for cq in call_queues.iter_mut() {
+        cq.distribution_lists = cq.distribution_lists.iter().map(|id| {
+            group_id_to_name.get(id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    // Si pas résolu, tronquer le GUID pour l'affichage
+                    let s: String = id.chars().take(8).collect();
+                    if id.len() > 8 { format!("{s}…") } else { s }
+                })
+        }).collect();
+    }
+}
+
+/// Calcule resource_account_count et resource_account_licensed_count pour chaque AutoAttendant.
+/// Utilise application_instances (UPN ou ObjectId) en croisant avec les comptes ressources connus.
+fn compute_resource_account_counts(
+    data: &mut DashboardData,
+    user_id_to_upn: &std::collections::HashMap<String, String>,
+) {
+    // Map UPN (minuscules) → est_licencié pour les comptes ressources
+    let ra_by_upn: std::collections::HashMap<String, bool> = data.resource_accounts.iter()
+        .map(|r| (lower(&r.upn), r.licensed == "Oui"))
+        .collect();
+
+    for aa in data.auto_attendants.iter_mut() {
+        if aa.application_instances.is_empty() {
+            continue;
+        }
+        let mut count = 0i64;
+        let mut licensed_count = 0i64;
+        for inst in &aa.application_instances {
+            count += 1;
+            let inst_lower = lower(inst);
+            // Essayer comme UPN direct
+            let is_licensed = if let Some(&l) = ra_by_upn.get(&inst_lower) {
+                Some(l)
+            } else {
+                // Essayer comme ObjectId → chercher l'UPN correspondant
+                user_id_to_upn.get(inst).and_then(|upn| ra_by_upn.get(&lower(upn))).copied()
+            };
+            if let Some(true) = is_licensed {
+                licensed_count += 1;
+            }
+        }
+        aa.resource_account_count = count;
+        aa.resource_account_licensed_count = licensed_count;
+    }
+}
+
 pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_id: &str, teams_token: Option<String>, client_secret: Option<String>) -> DashboardData {
     let mut data = DashboardData::default();
     let mut sku_id_map: std::collections::HashMap<String, String> = Default::default();
     let mut assigned_numbers_by_target: std::collections::HashMap<String, Vec<String>> = Default::default();
+    // Maps construites pendant la collecte des utilisateurs pour l'enrichissement des CQ/AA
+    let mut user_id_to_name:  std::collections::HashMap<String, String> = Default::default();
+    let mut user_id_to_upn:   std::collections::HashMap<String, String> = Default::default();
+    let mut group_id_to_name: std::collections::HashMap<String, String> = Default::default();
 
     match fetch_pages(client, token, &format!("{V1}/subscribedSkus")).await {
         Err(e) => data.errors.push(format!("Abonnements : {e}")),
@@ -932,6 +1171,11 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 let upn = str_val(u, "userPrincipalName");
                 let name = str_val(u, "displayName");
                 let enabled = bool_val(u, "accountEnabled");
+                // Alimenter les maps pour l'enrichissement CQ/AA
+                if !user_id.is_empty() {
+                    user_id_to_name.insert(user_id.clone(), name.clone());
+                    user_id_to_upn.insert(user_id.clone(), upn.clone());
+                }
                 let location = str_val(u, "usageLocation");
 
                 let lic_skus: Vec<String> = u
@@ -1031,16 +1275,33 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
         }
     }
 
+    // Résolution des groupes (listes de distribution) : GUID → displayName
+    match fetch_pages(client, token, &format!("{V1}/groups?$select=id,displayName&$top=999")).await {
+        Ok(groups) => {
+            for g in &groups {
+                if let (Some(id), Some(name)) = (
+                    g.get("id").and_then(|v| v.as_str()),
+                    g.get("displayName").and_then(|v| v.as_str()),
+                ) {
+                    group_id_to_name.insert(id.to_string(), name.to_string());
+                }
+            }
+        }
+        Err(_) => {} // non bloquant
+    }
+
     // Récupération des files d'attente et standards automatiques via PowerShell MicrosoftTeams.
     // Méthode préférée : client_credentials (TEAMS_CLIENT_SECRET configuré).
     // Fallback : tokens délégués (TEAMS_TOKEN / TEAMS_TOKEN2).
     // L'exécution est invisible (pas de fenêtre PowerShell).
     {
-        let tok      = token.to_string();
-        let tid      = tenant_id.to_string();
-        let app_id   = client_id.to_string();
+        let tok       = token.to_string();
+        let tid       = tenant_id.to_string();
+        let app_id    = client_id.to_string();
         let teams_tok = teams_token.clone();
         let client_sec = client_secret.clone();
+
+        #[cfg(windows)]
         match tokio::task::spawn_blocking(move || {
             run_powershell_for_teams(&tok, &tid, &app_id, teams_tok.as_deref(), client_sec.as_deref())
         }).await {
@@ -1060,12 +1321,25 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 data.warnings.push(format!("Erreur tâche PowerShell : {e}"));
             }
         }
+
+        #[cfg(not(windows))]
+        {
+            // Sur macOS/Linux, PowerShell n'est pas disponible en standard.
+            // Les onglets CQ/AA seront alimentés depuis les comptes ressources (fallback).
+            let _ = (tok, tid, app_id, teams_tok, client_sec); // éviter les warnings de compilation
+            data.warnings.push(
+                "Module PowerShell MicrosoftTeams indisponible (Windows requis). Affichage à partir des comptes ressources détectés.".into()
+            );
+        }
     }
 
     merge_resource_based_queues(&mut data);
     merge_resource_based_attendants(&mut data);
     enrich_from_resource_accounts(&mut data);
     compute_deletability(&mut data);
+    enrich_agents(&mut data.call_queues, &user_id_to_name);
+    enrich_distribution_lists(&mut data.call_queues, &group_id_to_name);
+    compute_resource_account_counts(&mut data, &user_id_to_upn);
 
     let known_resource_numbers: std::collections::HashSet<String> = data
         .resource_accounts
