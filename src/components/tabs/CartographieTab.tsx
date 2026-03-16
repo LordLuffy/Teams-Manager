@@ -556,14 +556,13 @@ function OrphanSection({ title, items, color }: { title: string; items: string[]
 // ─── Liste view ───────────────────────────────────────────────────────────────
 
 interface ListeViewProps {
-  data: DashboardData;
   chains: Chain[];
   freeChains: Chain[];
   orphanAAs: string[];
   orphanCQs: string[];
 }
 
-function ListeView({ data, chains, freeChains, orphanAAs, orphanCQs }: ListeViewProps) {
+function ListeView({ chains, freeChains, orphanAAs, orphanCQs }: ListeViewProps) {
   const total = chains.length + freeChains.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -663,7 +662,7 @@ export default function CartographieTab({ data }: Props) {
       </div>
 
       {subTab === "liste"
-        ? <ListeView data={data} chains={chains} freeChains={freeChains} orphanAAs={orphanAAs} orphanCQs={orphanCQs} />
+        ? <ListeView chains={chains} freeChains={freeChains} orphanAAs={orphanAAs} orphanCQs={orphanCQs} />
         : <TopoGraph chains={chains} freeChains={freeChains} />
       }
     </div>

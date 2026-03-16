@@ -125,9 +125,9 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
     }
     switch (activeTab) {
       case "directoryUsers": return <DirectoryUsersTab data={data.directoryUsers} />;
-      case "phoneUsers": return <PhoneUsersTab data={data.phoneUsers} />;
+      case "phoneUsers": return <PhoneUsersTab data={data.phoneUsers} onActionDone={onRefresh} />;
       case "freeNumbers": return <FreeNumbersTab data={data.freeNumbers} />;
-      case "orphanLicenses": return <OrphanLicensesTab data={data.orphanLicenses} />;
+      case "orphanLicenses": return <OrphanLicensesTab data={data.orphanLicenses} freeNumbers={data.freeNumbers} onActionDone={onRefresh} />;
       case "userLicenses": return <UserLicensesTab data={data.userLicenses} />;
       case "subscriptions": return <SubscriptionsTab data={data.subscriptions} />;
       case "callQueues": return <CallQueuesTab data={data.callQueues} />;
@@ -274,38 +274,30 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                   </p>
                 )}
               </div>
-              {/* Bouton "Voir les logs" toujours visible dans le banner */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-                <button className="btn" style={{ fontSize: 12 }}
-                  onClick={() => invoke("open_log_file").catch(() => {})}>
-                  <LogIcon /> Voir les logs
-                </button>
-                {needsSecret && (
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onSetup}>
-                    <SettingsIcon /> Configuration
-                  </button>
-                )}
-                {platform === "windows" && !needsSecret && (psState === "idle" || (psState === "error" && !needsPs7)) && (
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleInstallModule}>
-                    Installer le module
-                  </button>
-                )}
-                {platform === "windows" && psState === "error" && needsPs7 && (
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => openUrl(ps7Url)}>
-                    Télécharger PowerShell 7
-                  </button>
-                )}
-                {psState === "installing" && (
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} disabled>
-                    <SpinIcon /> Installation…
-                  </button>
-                )}
-                {psState === "done" && (
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onRefresh}>
-                    <RefreshIcon /> Actualiser
-                  </button>
-                )}
-              </div>
+              {(needsSecret || (platform === "windows" && !needsSecret && (psState === "idle" || psState === "error" || psState === "installing"))) && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                  {needsSecret && (
+                    <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onSetup}>
+                      <SettingsIcon /> Configuration
+                    </button>
+                  )}
+                  {platform === "windows" && !needsSecret && (psState === "idle" || (psState === "error" && !needsPs7)) && (
+                    <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleInstallModule}>
+                      Installer le module
+                    </button>
+                  )}
+                  {platform === "windows" && psState === "error" && needsPs7 && (
+                    <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => openUrl(ps7Url)}>
+                      Télécharger PowerShell 7
+                    </button>
+                  )}
+                  {psState === "installing" && (
+                    <button className="btn btn-primary" style={{ fontSize: 12 }} disabled>
+                      <SpinIcon /> Installation…
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {renderTab()}

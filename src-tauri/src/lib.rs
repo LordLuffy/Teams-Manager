@@ -490,6 +490,109 @@ async fn fetch_data(state: State<'_, Arc<AppState>>) -> Result<graph::DashboardD
     Ok(graph::collect_all(&http, &usable_access_token, &tenant_id, &client_id, teams_token, client_secret).await)
 }
 
+// ─── Assignation / désassignation de numéros Teams ───────────────────────────
+
+#[tauri::command]
+async fn assign_phone_number(
+    state: State<'_, Arc<AppState>>,
+    upn: String,
+    phone_number: String,
+    number_type: String,
+) -> Result<String, String> {
+    let (access_token, tenant_id, client_id, teams_token, client_secret) =
+        extract_tokens_for_ps(&state).await?;
+
+    tokio::task::spawn_blocking(move || {
+        graph::run_ps_phone_action(
+            "assign",
+            &upn,
+            &phone_number,
+            &number_type,
+            &access_token,
+            &tenant_id,
+            &client_id,
+            teams_token.as_deref(),
+            client_secret.as_deref(),
+        )
+        .map(|_| "ok".to_string())
+    })
+    .await
+    .map_err(|e| format!("Tâche bloquante échouée : {e}"))?
+}
+
+#[tauri::command]
+async fn unassign_phone_number(
+    state: State<'_, Arc<AppState>>,
+    upn: String,
+) -> Result<String, String> {
+    let (access_token, tenant_id, client_id, teams_token, client_secret) =
+        extract_tokens_for_ps(&state).await?;
+
+    tokio::task::spawn_blocking(move || {
+        graph::run_ps_phone_action(
+            "unassign",
+            &upn,
+            "",
+            "",
+            &access_token,
+            &tenant_id,
+            &client_id,
+            teams_token.as_deref(),
+            client_secret.as_deref(),
+        )
+        .map(|_| "ok".to_string())
+    })
+    .await
+    .map_err(|e| format!("Tâche bloquante échouée : {e}"))?
+}
+
+async fn extract_tokens_for_ps(
+    state: &State<'_, Arc<AppState>>,
+) -> Result<(String, String, String, Option<String>, Option<String>), String> {
+    let current = {
+        let guard = state.token.lock().await;
+        guard.as_ref().cloned().ok_or("Non authentifié. Veuillez vous connecter.")?
+    };
+    let tenant_id = state.tenant_id.lock().await.clone();
+    let client_id = state.client_id.lock().await.clone();
+
+    let access_token = if current.is_expired() {
+        let refresh = current.refresh_token.clone()
+            .ok_or("Session expirée et aucun refresh token disponible.")?;
+        let http = reqwest::Client::new();
+        let refreshed = auth::refresh_access_token(&http, &tenant_id, &client_id, &refresh).await?;
+        {
+            let mut guard = state.token.lock().await;
+            *guard = Some(refreshed.clone());
+        }
+        refreshed.access_token
+    } else {
+        current.access_token
+    };
+
+    let client_secret = {
+        let s = state.client_secret.lock().await.clone();
+        if s.is_empty() { None } else { Some(s) }
+    };
+
+    let teams_token = {
+        let current2 = state.token.lock().await
+            .as_ref()
+            .and_then(|t| t.refresh_token.clone());
+        if let Some(rt) = current2 {
+            let http = reqwest::Client::new();
+            match auth::get_teams_service_token(&http, &tenant_id, &client_id, &rt).await {
+                Ok(t)  => Some(t),
+                Err(_) => None,
+            }
+        } else {
+            None
+        }
+    };
+
+    Ok((access_token, tenant_id, client_id, teams_token, client_secret))
+}
+
 // ─── Export CSV ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -640,6 +743,8 @@ pub fn run() {
             get_auth_status,
             disconnect,
             fetch_data,
+            assign_phone_number,
+            unassign_phone_number,
             export_csv,
             install_ps_module,
             get_ps_info,

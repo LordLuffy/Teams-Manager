@@ -333,10 +333,15 @@ fn is_free_subscription_sku(sku: &str) -> bool {
         || matches!(upper.as_str(), "MCOEV_VIRTUALUSER" | "PHONESYSTEM_VIRTUALUSER" | "TEAMS_PHONE_RESOURCE_ACCOUNT")
 }
 
-fn compute_subscription_status(available: i64, is_free: bool) -> String {
+fn compute_subscription_status(available: i64, consumed: i64, purchased: i64, is_free: bool) -> String {
     if available < 0 {
+        // Dépassement réel (plus consommé que payé)
         "DEPASSEMENT".into()
-    } else if is_free {
+    } else if is_free || purchased >= 10_000 {
+        // Licence gratuite ou quasi-illimitée (bundle lié à d'autres offres)
+        "OK".into()
+    } else if consumed == 0 {
+        // Aucune attribution — pas un surplus, juste capacité non utilisée
         "OK".into()
     } else if available <= 1 {
         "OK".into()
@@ -1018,6 +1023,139 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     Ok((cqs, aas, diagnostics))
 }
 
+// ─── PS phone action script ──────────────────────────────────────────────────
+
+static PS_PHONE_SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+try {
+    $importOk = $false
+    try { Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null; $importOk = $true } catch { }
+    if (-not $importOk) {
+        $m = Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1
+        if ($m) { Import-Module (Join-Path $m.ModuleBase 'MicrosoftTeams.psd1') -Force -ErrorAction Stop -WarningAction SilentlyContinue 3>$null }
+        else { throw "Module MicrosoftTeams introuvable. Installez-le depuis l'onglet Files d'attente." }
+    }
+
+    $clientSecret = $env:TEAMS_CLIENT_SECRET
+    $appId        = $env:TEAMS_APP_ID
+    $useAppAuth   = $clientSecret -and $clientSecret -ne '' -and $appId -and $appId -ne ''
+
+    if ($useAppAuth) {
+        $uri = "https://login.microsoftonline.com/$($env:TEAMS_TENANT)/oauth2/v2.0/token"
+        $graphToken = (Invoke-RestMethod -Uri $uri -Method POST -UseBasicParsing -Body @{
+            grant_type='client_credentials'; scope='https://graph.microsoft.com/.default'; client_id=$appId; client_secret=$clientSecret
+        }).access_token
+        $teamsToken = (Invoke-RestMethod -Uri $uri -Method POST -UseBasicParsing -Body @{
+            grant_type='client_credentials'; scope='48ac35b8-9aa8-4d74-927d-1f4a14a0b239/.default'; client_id=$appId; client_secret=$clientSecret
+        }).access_token
+        Connect-MicrosoftTeams -AccessTokens @($graphToken, $teamsToken) -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+    } else {
+        $graphToken = $env:TEAMS_TOKEN
+        $teamsToken = $env:TEAMS_TOKEN2
+        $toks = if ($teamsToken -and $teamsToken -ne '') { @($graphToken, $teamsToken) } else { @($graphToken) }
+        Connect-MicrosoftTeams -TenantId $env:TEAMS_TENANT -AccessTokens $toks -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
+    }
+
+    $action      = $env:ACTION_TYPE
+    $upn         = $env:ACTION_UPN
+    $phoneNumber = $env:ACTION_PHONE
+    $numberType  = $env:ACTION_NUMBER_TYPE
+
+    if ($action -eq 'assign') {
+        Set-CsPhoneNumberAssignment -Identity $upn -PhoneNumber $phoneNumber -PhoneNumberType $numberType -ErrorAction Stop
+        Set-CsPhoneNumberAssignment -Identity $upn -EnterpriseVoiceEnabled $true -ErrorAction Stop
+        if ($numberType -eq 'DirectRouting' -or $numberType -eq 'OperatorConnect') {
+            $policy = Get-CsOnlineVoiceRoutingPolicy | Where-Object { $_.Identity -ne 'Global' } | Select-Object -First 1
+            if ($policy) { Grant-CsOnlineVoiceRoutingPolicy -Identity $upn -PolicyName $policy.Identity -ErrorAction Stop }
+        }
+    } elseif ($action -eq 'unassign') {
+        Remove-CsPhoneNumberAssignment -Identity $upn -RemoveAll -ErrorAction Stop
+        Grant-CsOnlineVoiceRoutingPolicy -Identity $upn -PolicyName $null -ErrorAction Stop
+    } else {
+        throw "Action inconnue : $action"
+    }
+
+    Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue | Out-Null
+    Write-Output '{"ok":true}'
+} catch {
+    $msg = [string]$_.Exception.Message
+    $escaped = $msg -replace '\\', '\\\\' -replace '"', '\"'
+    Write-Output "{`"ok`":false,`"error`":`"$escaped`"}"
+}
+"#;
+
+pub fn run_ps_phone_action(
+    action: &str,
+    upn: &str,
+    phone_number: &str,
+    number_type: &str,
+    graph_token: &str,
+    tenant_id: &str,
+    client_id: &str,
+    teams_token: Option<&str>,
+    client_secret: Option<&str>,
+) -> Result<(), String> {
+    let temp_path = std::env::temp_dir().join("teams_phone_action.ps1");
+    std::fs::write(&temp_path, PS_PHONE_SCRIPT.as_bytes())
+        .map_err(|e| format!("Impossible d'écrire le script PS : {e}"))?;
+    let script_path = temp_path.to_string_lossy().to_string();
+
+    let mut cmd = std::process::Command::new(ps_exe());
+    cmd.arg("-NonInteractive")
+        .arg("-NoProfile")
+        .arg("-ExecutionPolicy").arg("Bypass")
+        .arg("-File").arg(&script_path)
+        .env("ACTION_TYPE",        action)
+        .env("ACTION_UPN",         upn)
+        .env("ACTION_PHONE",       phone_number)
+        .env("ACTION_NUMBER_TYPE", number_type)
+        .env("TEAMS_TOKEN",        graph_token)
+        .env("TEAMS_TENANT",       tenant_id)
+        .env("TEAMS_APP_ID",       client_id);
+
+    if let Some(t2) = teams_token {
+        cmd.env("TEAMS_TOKEN2", t2);
+    }
+    if let Some(cs) = client_secret {
+        cmd.env("TEAMS_CLIENT_SECRET", cs);
+    }
+
+    let out = cmd.output().map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("Impossible de lancer PowerShell : {e}")
+    })?;
+    let _ = std::fs::remove_file(&temp_path);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let trimmed = stdout.trim();
+
+    // Trouver la dernière ligne JSON
+    let json_line = trimmed.lines()
+        .filter(|l| l.starts_with('{'))
+        .last()
+        .unwrap_or(trimmed);
+
+    let v: serde_json::Value = serde_json::from_str(json_line)
+        .map_err(|_| {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            format!("Réponse PS inattendue : {trimmed}\n{stderr}")
+        })?;
+
+    if v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false) {
+        Ok(())
+    } else {
+        let err = v.get("error")
+            .and_then(|x| x.as_str())
+            .unwrap_or("Erreur inconnue")
+            .to_string();
+        Err(err)
+    }
+}
+
 /// Remplace les ObjectIds d'agents (GUID AAD) par les noms d'affichage correspondants.
 /// Les IDs non résolus sont conservés sous forme abrégée (8 premiers caractères + "…").
 fn enrich_agents(
@@ -1122,7 +1260,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                     suspended,
                     consumed,
                     available,
-                    status: compute_subscription_status(available, is_free),
+                    status: compute_subscription_status(available, consumed, enabled, is_free),
                     is_free,
                 });
             }

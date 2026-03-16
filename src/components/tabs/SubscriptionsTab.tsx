@@ -47,7 +47,7 @@ export default function SubscriptionsTab({ data }: Props) {
         </div>
       </div>
       <div style={{ background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.2)", color: "var(--info)", borderRadius: 8, padding: "10px 14px", marginBottom: 18, fontSize: 12, lineHeight: 1.6 }}>
-        Pour les licences payantes : 0 à 1 disponible = vert, 2 à 4 = orange, au-delà = rouge. Les licences gratuites restent en vert tant qu'il n'y a pas de dépassement détecté.
+        Statuts : <strong>OK</strong> si 0–1 dispo (ou non consommée, ou licence quasi-illimitée ≥ 10 000). <strong>Surplus</strong> = 2–4 dispo. <strong>Surplus important</strong> = 5+ dispo. <strong>Dépassement</strong> = quota dépassé. Les licences gratuites restent toujours vertes.
       </div>
       <DataTable<Subscription> columns={columns} data={data} exportFilename="abonnements.csv" />
     </div>
