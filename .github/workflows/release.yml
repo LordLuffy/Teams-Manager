@@ -44,35 +44,14 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Teams Manager ${{ github.ref_name }}'
           releaseBody: |
-            A Windows desktop application designed to audit Microsoft 365 licenses and Teams telephony resources without going through the Microsoft admin portal.
+            Fixes :
+              - Fixed the size of the settings window
 
-
-            ## 📑 Available tabs
-
-            ### ☎️ Telephony
-            - **All users** — complete directory of Azure AD users
-            - **Users** — users with an active Teams phone number
-            - **Unassigned numbers** — list of unassigned PSTN numbers in the tenant
-            - **Users without a number** — users with a telephony license but without an assigned number
-
-            ### 📦 Licenses
-            - **User licenses** — details of Microsoft 365 licenses per user
-            - **Subscriptions** — overview of tenant subscriptions (quantities and usage)
-
-            ### 🧩 Resources
-            - **Call queues** — list of Teams call queues (via Microsoft Teams PowerShell)
-            - **Auto attendants** — list of auto attendants (via Microsoft Teams PowerShell)
-            - **Resource accounts** — accounts of type MCOEV\_VIRTUALUSER
-            - **Mapping** — consolidated view of the relationships between numbers, resource accounts, and queues
-
-            ## ⚙️ Features
-
-            - 🔐 **Microsoft Authentication** via Device Code Flow (no passwords stored)
-            - 🔑 **Secure storage** of credentials and tokens in Windows Identity Manager
-            - 📤 **CSV export** available in each tab
-            - 🧾 **Application logs** with customizable path
-            - 🔄 **Automatic updates** signed via GitHub Releases
-            - 🔎 **Manual check** for updates from the sidebar
+            New features :
+              - Redesigned the settings screen UI
+              - Added predefined themes to the app
+              - Added multilingual support : FR / EN / DE / ES
+              - Added a debug mode
 
 
             Please feel free to submit your feedback via [GitHub Issues](https://github.com/LordLuffy/Teams-Manager/issues) to help improve future versions.
