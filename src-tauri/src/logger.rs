@@ -2,15 +2,25 @@ use std::{
     fs::OpenOptions,
     io::Write,
     path::PathBuf,
-    sync::{Mutex, OnceLock, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex, OnceLock, RwLock,
+    },
 };
 use tauri::AppHandle;
 use tauri::Manager;
+
+/// Active ou désactive la génération de logs. Désactivé par défaut.
+static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Chemin du fichier de log. Initialisé une seule fois, puis potentiellement
 /// remplacé par un chemin personnalisé via `set_custom_path`.
 static LOG_FILE_PATH: OnceLock<RwLock<PathBuf>> = OnceLock::new();
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+pub fn set_enabled(enabled: bool) {
+    DEBUG_ENABLED.store(enabled, Ordering::Relaxed);
+}
 
 fn timestamp() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
@@ -33,7 +43,7 @@ pub fn init(app: &AppHandle, custom_path: Option<&str>) -> Result<PathBuf, Strin
     };
 
     let _ = LOG_FILE_PATH.set(RwLock::new(path.clone()));
-    info("Journalisation initialisée.");
+    // Ne pas appeler info() ici — le debug peut être désactivé au démarrage
     Ok(path)
 }
 
@@ -57,6 +67,10 @@ pub fn current_path() -> Option<PathBuf> {
 }
 
 fn append(level: &str, message: &str) {
+    // Si le mode débogage est désactivé, aucun log n'est écrit
+    if !DEBUG_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
     let Some(lock) = LOG_FILE_PATH.get() else { return };
     let path = match lock.read() {
         Ok(g) => g.clone(),

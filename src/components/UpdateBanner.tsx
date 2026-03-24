@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "../i18n";
 
 interface Props {
   version: string;
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function UpdateBanner({ version, notes, onDismiss }: Props) {
+  const { t } = useI18n();
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ export default function UpdateBanner({ version, notes, onDismiss }: Props) {
         </svg>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", letterSpacing: "0.02em" }}>
-            Mise à jour disponible
+            {t("update.available")}
           </div>
           <div style={{ fontSize: 11, color: "#60a5fa", fontWeight: 600 }}>
             v{version}
@@ -88,7 +90,7 @@ export default function UpdateBanner({ version, notes, onDismiss }: Props) {
           disabled={installing}
           style={{ fontSize: 11, flex: 1 }}
         >
-          Plus tard
+          {t("update.later")}
         </button>
         <button
           className="btn btn-primary btn-sm"
@@ -96,7 +98,7 @@ export default function UpdateBanner({ version, notes, onDismiss }: Props) {
           disabled={installing}
           style={{ fontSize: 11, flex: 1 }}
         >
-          {installing ? "Installation…" : "Installer"}
+          {installing ? t("update.installing") : t("update.install")}
         </button>
       </div>
     </div>

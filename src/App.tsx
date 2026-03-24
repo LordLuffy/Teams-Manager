@@ -1,21 +1,41 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppScreen, AppConfig, DashboardData } from "./types";
+import { useI18n } from "./i18n";
 import SetupScreen from "./components/SetupScreen";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
+import SettingsModal from "./components/SettingsModal";
 
 async function logFrontendError(context: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   await invoke("log_frontend_error", { context, message }).catch(() => undefined);
 }
 
+/** Applique le thème sauvegardé au démarrage */
+function initTheme() {
+  const saved = localStorage.getItem("tm-theme") ?? "sombre";
+  document.documentElement.setAttribute("data-theme", saved);
+}
+initTheme();
+
 export default function App() {
+  const { setLang } = useI18n();
   const [screen, setScreen] = useState<AppScreen>("setup");
+  const [showSettings, setShowSettings] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
+  // Initialize debug mode and language from saved localStorage on startup
+  useEffect(() => {
+    const savedDebug = localStorage.getItem("tm-debug") === "true";
+    invoke("set_debug_mode", { enabled: savedDebug }).catch(() => undefined);
+
+    const savedLang = localStorage.getItem("tm-language");
+    if (savedLang) setLang(savedLang as import("./i18n").Lang);
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setLoading(true);
@@ -65,24 +85,9 @@ export default function App() {
     setScreen("auth");
   }
 
-  // First-time setup: must connect to proceed
+  // First-time setup
   if (screen === "setup") {
-    return (
-      <SetupScreen
-        onConnect={() => setScreen("auth")}
-      />
-    );
-  }
-
-  // Settings overlay opened from dashboard: save without re-auth, or reconnect if needed
-  if (screen === "settings") {
-    return (
-      <SetupScreen
-        isSettings
-        onConnect={() => setScreen("auth")}
-        onClose={() => setScreen("dashboard")}
-      />
-    );
+    return <SetupScreen onConnect={() => setScreen("auth")} />;
   }
 
   if (screen === "auth") {
@@ -98,14 +103,22 @@ export default function App() {
   }
 
   return (
-    <Dashboard
-      data={data}
-      lastRefresh={lastRefresh}
-      loading={loading}
-      runtimeError={runtimeError}
-      onRefresh={handleRefresh}
-      onDisconnect={handleDisconnect}
-      onSetup={() => setScreen("settings")}
-    />
+    <>
+      <Dashboard
+        data={data}
+        lastRefresh={lastRefresh}
+        loading={loading}
+        runtimeError={runtimeError}
+        onRefresh={handleRefresh}
+        onDisconnect={handleDisconnect}
+        onSetup={() => setShowSettings(true)}
+      />
+      {showSettings && (
+        <SettingsModal
+          onConnect={() => { setShowSettings(false); setScreen("auth"); }}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </>
   );
 }

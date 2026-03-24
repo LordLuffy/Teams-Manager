@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DataTable, { type Column } from "../DataTable";
 import type { PhoneUser } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props {
   data: PhoneUser[];
@@ -20,6 +21,7 @@ const badgeOuiNon = (value: unknown) => {
 };
 
 export default function PhoneUsersTab({ data, onActionDone }: Props) {
+  const { t } = useI18n();
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   function openConfirm(row: PhoneUser) {
@@ -43,12 +45,12 @@ export default function PhoneUsersTab({ data, onActionDone }: Props) {
   }
 
   const columns: Column<PhoneUser>[] = [
-    { key: "displayName", label: "Nom" },
-    { key: "upn", label: "UPN" },
-    { key: "phoneNumber", label: "Numéro Teams" },
+    { key: "displayName", label: t("tabs.phoneUsers.name") },
+    { key: "upn", label: t("tabs.phoneUsers.upn") },
+    { key: "phoneNumber", label: t("tabs.phoneUsers.phone") },
     {
       key: "evEnabled",
-      label: "Voix entreprise",
+      label: t("tabs.phoneUsers.enterpriseVoice"),
       tooltip: "Enterprise Voice (EV) : indique si la fonctionnalité voix d'entreprise Teams est activée pour cet utilisateur, lui permettant de passer et recevoir des appels téléphoniques.",
       render: badgeOuiNon,
     },

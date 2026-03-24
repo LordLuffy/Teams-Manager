@@ -1,5 +1,6 @@
 import DataTable, { type Column } from "../DataTable";
 import type { Subscription } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: Subscription[]; }
 
@@ -17,18 +18,19 @@ function availableCell(v: unknown, row: Subscription) {
   return <span style={{ color, fontWeight: row.status === "OK" ? 500 : 700 }}>{n}</span>;
 }
 
-const columns: Column<Subscription>[] = [
-  { key: "friendlyName", label: "Licence" },
-  { key: "sku", label: "SKU" },
-  { key: "purchased", label: "Payées" },
-  { key: "suspended", label: "Suspendues" },
-  { key: "consumed", label: "Consommées" },
-  { key: "available", label: "Disponibles", render: availableCell },
-  { key: "status", label: "Statut", render: (v) => statusBadge(String(v)) },
-];
-
 export default function SubscriptionsTab({ data }: Props) {
+  const { t } = useI18n();
   const totalConsumed = data.reduce((sum, s) => sum + s.consumed, 0);
+
+  const columns: Column<Subscription>[] = [
+    { key: "friendlyName", label: t("tabs.subscriptions.product") },
+    { key: "sku", label: "SKU" },
+    { key: "purchased", label: t("tabs.subscriptions.total") },
+    { key: "suspended", label: t("tabs.subscriptions.suspended") },
+    { key: "consumed", label: t("tabs.subscriptions.assigned") },
+    { key: "available", label: t("tabs.subscriptions.available"), render: availableCell },
+    { key: "status", label: "Statut", render: (v) => statusBadge(String(v)) },
+  ];
 
   return (
     <div>

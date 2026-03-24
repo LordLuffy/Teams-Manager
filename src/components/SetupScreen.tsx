@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "../i18n";
 
 interface Props {
   /** Called after saving Tenant/Client ID → redirects to auth flow */
@@ -54,6 +55,7 @@ function AccordionHeader({
 }
 
 export default function SetupScreen({ onConnect, onClose, isSettings = false }: Props) {
+  const { t } = useI18n();
   const [tenantId, setTenantId] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -165,7 +167,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
       };
       if (logPath.trim()) config.log_path = logPath.trim();
       await invoke("save_config", { config });
-      setSaveMsg("Paramètres enregistrés.");
+      setSaveMsg(t("settings.saved"));
       setTimeout(() => setSaveMsg(""), 3000);
     } catch (error) {
       setSaveErr(error instanceof Error ? error.message : String(error));
@@ -202,9 +204,9 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
             </div>
             <div>
               <h1 style={{ color: "var(--text-1)", fontSize: 18, fontWeight: 600, margin: 0 }}>
-                {isSettings ? "Paramètres" : "Configuration"}
+                {isSettings ? t("setup.settingsTitle") : t("setup.title")}
               </h1>
-              <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>Teams Manager</p>
+              <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>{t("setup.subtitle")}</p>
             </div>
           </div>
 
@@ -217,7 +219,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              Fermer
+              {t("setup.close")}
             </button>
           )}
         </div>
@@ -227,29 +229,29 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
           <AccordionHeader
             open={showConnection}
             onToggle={() => setShowConnection(!showConnection)}
-            label="Connexion Azure AD"
+            label={t("setup.azureAccordion")}
           />
 
           {showConnection && (
             <div style={{ marginTop: 12 }}>
               <div style={{ background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-                <p style={{ color: "var(--info)", fontSize: 12, fontWeight: 600, marginBottom: 6, marginTop: 0 }}>Enregistrement Azure AD requis</p>
+                <p style={{ color: "var(--info)", fontSize: 12, fontWeight: 600, marginBottom: 6, marginTop: 0 }}>{t("setup.azureInfoTitle")}</p>
                 <ol style={{ color: "var(--text-3)", fontSize: 12, paddingLeft: 16, lineHeight: 1.85, margin: 0 }}>
-                  <li>Allez sur <strong style={{ color: "var(--text-2)" }}>portal.azure.com</strong> → App registrations → New registration</li>
-                  <li>Choisissez <em>Public client / native</em> comme type de plateforme</li>
-                  <li>Permissions API (déléguées) : <code style={{ color: "var(--info)" }}>User.Read.All</code>, <code style={{ color: "var(--info)" }}>Directory.Read.All</code>, <code style={{ color: "var(--info)" }}>Organization.Read.All</code></li>
-                  <li>Dans Authentication, activez <em>Allow public client flows</em></li>
-                  <li>Copiez le Tenant ID et le Client (Application) ID ci-dessous</li>
+                  <li>{t("setup.azureStep1")}</li>
+                  <li>{t("setup.azureStep2")}</li>
+                  <li>{t("setup.azureStep3")}</li>
+                  <li>{t("setup.azureStep4")}</li>
+                  <li>{t("setup.azureStep5")}</li>
                 </ol>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
-                  <label style={{ display: "block", color: "var(--text-2)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Tenant ID</label>
+                  <label style={{ display: "block", color: "var(--text-2)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{t("setup.tenantId")}</label>
                   <input className="input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
                 </div>
                 <div>
-                  <label style={{ display: "block", color: "var(--text-2)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Client (Application) ID</label>
+                  <label style={{ display: "block", color: "var(--text-2)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{t("setup.clientId")}</label>
                   <input className="input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={clientId} onChange={(e) => setClientId(e.target.value)} />
                 </div>
               </div>
@@ -264,7 +266,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
                 onClick={handleConnect}
                 disabled={connecting}
               >
-                {connecting ? "Connexion en cours…" : isSettings ? "Reconnecter avec Microsoft" : "Se connecter avec Microsoft"}
+                {connecting ? t("setup.connecting") : isSettings ? t("setup.reconnect") : t("setup.connect")}
               </button>
             </div>
           )}
@@ -275,7 +277,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
           <AccordionHeader
             open={showSecret}
             onToggle={() => setShowSecret(!showSecret)}
-            label="Files d'attente & Standards automatiques (optionnel)"
+            label={t("setup.psAccordion")}
           />
 
           {showSecret && (
@@ -299,7 +301,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
 
               <div>
                 <label style={{ display: "block", color: "var(--text-2)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-                  Client Secret <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(optionnel)</span>
+                  {t("setup.secretLabel")} <span style={{ color: "var(--text-3)", fontWeight: 400 }}>{t("setup.secretOptional")}</span>
                 </label>
                 <input
                   className="input"
@@ -309,7 +311,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
                   onChange={(e) => setClientSecret(e.target.value)}
                 />
                 <p style={{ color: "var(--text-3)", fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-                  Stocké dans le Gestionnaire d'informations d'identification Windows — jamais en clair dans les fichiers.
+                  {t("setup.secretNote")}
                 </p>
               </div>
             </div>
@@ -321,13 +323,13 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
           <AccordionHeader
             open={showLog}
             onToggle={() => setShowLog(!showLog)}
-            label="Dossier des journaux (optionnel)"
+            label={t("setup.logsAccordion")}
           />
 
           {showLog && (
             <div style={{ marginTop: 12 }}>
               <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 0, marginBottom: 10 }}>
-                Par défaut, les logs sont enregistrés dans le dossier AppData de l'application. Vous pouvez choisir un emplacement personnalisé.
+                {t("setup.logsDesc")}
               </p>
 
               <div style={{ display: "flex", gap: 8 }}>
@@ -347,7 +349,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                   </svg>
-                  Parcourir
+                  {t("setup.logsBrowse")}
                 </button>
               </div>
 
@@ -356,11 +358,11 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
                   style={{ marginTop: 6, background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 11, padding: 0 }}
                   onClick={() => setLogPath("")}
                 >
-                  ✕ Réinitialiser (utiliser AppData)
+                  {t("setup.logsReset")}
                 </button>
               ) : defaultLogPath ? (
                 <p style={{ color: "var(--text-3)", fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-                  Chemin actuel : <code style={{ fontSize: 11 }}>{defaultLogPath}</code>
+                  {t("setup.logsCurrentPath")} <code style={{ fontSize: 11 }}>{defaultLogPath}</code>
                 </p>
               ) : null}
             </div>
@@ -376,7 +378,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
               onClick={handleSaveSettings}
               disabled={saving}
             >
-              {saving ? "Enregistrement…" : "Enregistrer"}
+              {saving ? t("setup.saving") : t("setup.save")}
             </button>
             {onClose && (
               <button
@@ -384,7 +386,7 @@ export default function SetupScreen({ onConnect, onClose, isSettings = false }: 
                 style={{ flex: 1, justifyContent: "center", padding: "9px 0" }}
                 onClick={onClose}
               >
-                Fermer sans enregistrer
+                {t("setup.closeWithoutSaving")}
               </button>
             )}
           </div>

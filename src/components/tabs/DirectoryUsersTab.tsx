@@ -1,5 +1,6 @@
 import { DirectoryUser } from "../../types";
 import DataTable, { type Column } from "../DataTable";
+import { useI18n } from "../../i18n";
 
 interface Props {
   data?: DirectoryUser[];
@@ -16,32 +17,34 @@ const userTypeBadge = (value: unknown) => {
   return <span className="badge badge-neutral">Interne</span>;
 };
 
-const columns: Column<DirectoryUser>[] = [
-  { key: "displayName", label: "Nom" },
-  { key: "upn", label: "UPN" },
-  {
-    key: "userType",
-    label: "Type",
-    tooltip: "Interne = membre de l'organisation (userType: Member). Externe = utilisateur invité (userType: Guest), généralement un collaborateur externe ajouté via Azure AD B2B.",
-    render: userTypeBadge,
-  },
-  { key: "phoneNumber", label: "Numéro détecté" },
-  {
-    key: "hasPhoneLicense",
-    label: "Licence phone",
-    tooltip: "L'utilisateur possède une licence incluant Microsoft Teams Phone Standard (ou équivalente), nécessaire pour la téléphonie Teams (appels entrants et sortants via PSTN).",
-    render: badgeOuiNon,
-  },
-  {
-    key: "accountEnabled",
-    label: "Compte actif",
-    tooltip: "Indique si le compte Microsoft 365 de l'utilisateur est activé dans Azure Active Directory. Un compte inactif ne peut plus se connecter aux services Microsoft.",
-    render: badgeOuiNon,
-  },
-  { key: "licenses", label: "Licences" },
-];
-
 export default function DirectoryUsersTab({ data }: Props) {
+  const { t } = useI18n();
+
+  const columns: Column<DirectoryUser>[] = [
+    { key: "displayName", label: t("tabs.allUsers.name") },
+    { key: "upn", label: t("tabs.allUsers.upn") },
+    {
+      key: "userType",
+      label: "Type",
+      tooltip: "Interne = membre de l'organisation (userType: Member). Externe = utilisateur invité (userType: Guest), généralement un collaborateur externe ajouté via Azure AD B2B.",
+      render: userTypeBadge,
+    },
+    { key: "phoneNumber", label: t("tabs.allUsers.phone") },
+    {
+      key: "hasPhoneLicense",
+      label: t("tabs.allUsers.licensed"),
+      tooltip: "L'utilisateur possède une licence incluant Microsoft Teams Phone Standard (ou équivalente), nécessaire pour la téléphonie Teams (appels entrants et sortants via PSTN).",
+      render: badgeOuiNon,
+    },
+    {
+      key: "accountEnabled",
+      label: "Compte actif",
+      tooltip: "Indique si le compte Microsoft 365 de l'utilisateur est activé dans Azure Active Directory. Un compte inactif ne peut plus se connecter aux services Microsoft.",
+      render: badgeOuiNon,
+    },
+    { key: "licenses", label: "Licences" },
+  ];
+
   return (
     <>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>

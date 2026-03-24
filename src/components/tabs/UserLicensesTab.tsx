@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { UserLicense } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: UserLicense[]; }
 
@@ -22,6 +23,7 @@ interface UserGroup {
 }
 
 export default function UserLicensesTab({ data }: Props) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -194,9 +196,9 @@ export default function UserLicensesTab({ data }: Props) {
               <thead>
                 <tr>
                   <th style={{ width: 32, padding: "0 8px" }}></th>
-                  <th>Nom</th>
-                  <th>UPN</th>
-                  <th style={{ textAlign: "center" }}>Nb licences</th>
+                  <th>{t("tabs.userLicenses.name")}</th>
+                  <th>{t("tabs.userLicenses.upn")}</th>
+                  <th style={{ textAlign: "center" }}>{t("tabs.userLicenses.licenses")}</th>
                   <th title="Interne = membre de l'organisation. Externe = utilisateur invité (Azure AD B2B).">Type</th>
                   <th>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>

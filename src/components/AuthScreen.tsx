@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { DeviceCodeResult } from "../types";
+import { useI18n } from "../i18n";
 
 interface Props {
   onSetup: () => void;
@@ -12,6 +13,7 @@ interface Props {
 type Phase = "idle" | "polling";
 
 export default function AuthScreen({ onSetup, onConnected }: Props) {
+  const { t } = useI18n();
   const [phase, setPhase]           = useState<Phase>("idle");
   const [deviceInfo, setDeviceInfo] = useState<DeviceCodeResult | null>(null);
   const [error, setError]           = useState<string | null>(null);
@@ -88,10 +90,10 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
           </div>
           <div>
             <h2 style={{ color: "var(--text-1)", fontSize: 17, fontWeight: 600, margin: 0 }}>
-              Connexion Microsoft 365
+              {t("auth.title")}
             </h2>
             <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>
-              Authentification par code appareil
+              {t("auth.subtitle")}
             </p>
           </div>
         </div>
@@ -99,8 +101,7 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
         {phase === "idle" && (
           <>
             <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.65, marginBottom: 22 }}>
-              Cliquez sur le bouton ci-dessous pour démarrer l'authentification.
-              Un code vous sera affiché pour le saisir sur la page Microsoft.
+              {t("auth.startDesc")}
             </p>
 
             {error && (
@@ -122,12 +123,12 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
               {loading ? (
                 <>
                   <SpinIcon />
-                  Connexion en cours...
+                  {t("auth.connecting")}
                 </>
               ) : (
                 <>
                   <LoginIcon />
-                  Se connecter avec Microsoft
+                  {t("auth.signIn")}
                 </>
               )}
             </button>
@@ -137,9 +138,9 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
         {phase === "polling" && deviceInfo && (
           <>
             <p style={{ color: "var(--text-2)", fontSize: 13, marginBottom: 14 }}>
-              Rendez-vous sur{" "}
+              {t("auth.goTo")}{" "}
               <strong style={{ color: "var(--info)" }}>aka.ms/devicelogin</strong>
-              {" "}et saisissez ce code :
+              {" "}{t("auth.enterCode")}
             </p>
 
             <div className="code-box" style={{ marginBottom: 18 }}>
@@ -169,7 +170,7 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
             }}>
               <SpinIcon color="var(--info)" />
               <span style={{ color: "var(--info)", fontSize: 13 }}>
-                En attente de l'authentification...
+                {t("auth.waiting")}
               </span>
             </div>
           </>
@@ -187,7 +188,7 @@ export default function AuthScreen({ onSetup, onConnected }: Props) {
               padding: 0,
             }}
           >
-            ← Modifier la configuration
+            {t("auth.backToConfig")}
           </button>
         </div>
       </div>

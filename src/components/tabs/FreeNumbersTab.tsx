@@ -1,16 +1,19 @@
 import DataTable, { type Column } from "../DataTable";
 import type { FreeNumber } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: FreeNumber[]; }
 
-const columns: Column<FreeNumber>[] = [
-  { key: "number", label: "Numéro" },
-  { key: "numberType", label: "Type" },
-  { key: "capability", label: "Capacités" },
-  { key: "status", label: "Statut", render: (v) => <span className="badge badge-success">{String(v)}</span> },
-];
-
 export default function FreeNumbersTab({ data }: Props) {
+  const { t } = useI18n();
+
+  const columns: Column<FreeNumber>[] = [
+    { key: "number", label: t("tabs.freeNumbers.number") },
+    { key: "numberType", label: t("tabs.freeNumbers.type") },
+    { key: "capability", label: t("tabs.freeNumbers.city") },
+    { key: "status", label: t("tabs.freeNumbers.status"), render: (v) => <span className="badge badge-success">{String(v)}</span> },
+  ];
+
   return (
     <div>
       <div className="card" style={{ padding: "14px 18px", marginBottom: 18, display: "inline-flex", alignItems: "center", gap: 14 }}>

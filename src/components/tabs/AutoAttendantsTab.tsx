@@ -1,5 +1,6 @@
 import DataTable, { type Column } from "../DataTable";
 import type { AutoAttendant } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: AutoAttendant[]; }
 
@@ -22,26 +23,6 @@ function ResourceAccountBadge({ row }: { row: AutoAttendant }) {
   );
 }
 
-const columns: Column<AutoAttendant>[] = [
-  { key: "name", label: "Nom" },
-  {
-    key: "resourceAccountCount",
-    label: "Comptes ressources",
-    tooltip: "Nombre de comptes ressources liés à ce standard automatique. Un compte sans licence Teams Phone Resource Account ne peut pas recevoir de numéro PSTN.",
-    render: (_, row) => <ResourceAccountBadge row={row} />,
-  },
-  {
-    key: "defaultCallFlow",
-    label: "Flux d'appels",
-    tooltip: "« Transférer → Compte ressource » redirige vers une autre file d'attente ou un autre standard automatique (scénario de routage interne). « Transférer → SharedVoicemail » envoie directement vers une boîte vocale partagée (fin de chaîne). Cliquez sur ▶ pour voir le détail complet du routage.",
-  },
-  { key: "phoneNumber", label: "Numéro" },
-  {
-    key: "status",
-    label: "Statut",
-    render: (v) => <span className="badge badge-success">{String(v)}</span>,
-  },
-];
 
 function CallFlowDetail({ row }: { row: AutoAttendant }) {
   const df = row.defaultCallFlow?.trim();
@@ -139,6 +120,29 @@ function CallFlowDetail({ row }: { row: AutoAttendant }) {
 }
 
 export default function AutoAttendantsTab({ data }: Props) {
+  const { t } = useI18n();
+
+  const columns: Column<AutoAttendant>[] = [
+    { key: "name", label: t("tabs.autoAttendants.name") },
+    {
+      key: "resourceAccountCount",
+      label: t("nav.tabs.resourceAccounts"),
+      tooltip: "Nombre de comptes ressources liés à ce standard automatique. Un compte sans licence Teams Phone Resource Account ne peut pas recevoir de numéro PSTN.",
+      render: (_, row) => <ResourceAccountBadge row={row} />,
+    },
+    {
+      key: "defaultCallFlow",
+      label: "Flux d'appels",
+      tooltip: "« Transférer → Compte ressource » redirige vers une autre file d'attente ou un autre standard automatique (scénario de routage interne). « Transférer → SharedVoicemail » envoie directement vers une boîte vocale partagée (fin de chaîne). Cliquez sur ▶ pour voir le détail complet du routage.",
+    },
+    { key: "phoneNumber", label: "Numéro" },
+    {
+      key: "status",
+      label: "Statut",
+      render: (v) => <span className="badge badge-success">{String(v)}</span>,
+    },
+  ];
+
   return (
     <>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>

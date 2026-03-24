@@ -1,35 +1,9 @@
 import DataTable, { type Column } from "../DataTable";
 import type { CallQueue } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: CallQueue[]; }
 
-const columns: Column<CallQueue>[] = [
-  { key: "name",          label: "Nom" },
-  { key: "routingMethod", label: "Méthode de routage" },
-  { key: "agentCount",    label: "Nb agents" },
-  {
-    key: "timeoutAction",
-    label: "Expiration",
-    tooltip: "Action effectuée lorsqu'un appel attend trop longtemps dans la file (délai d'attente dépassé).",
-  },
-  {
-    key: "overflowAction",
-    label: "Débordement",
-    tooltip: "Action effectuée lorsque la file d'attente est pleine (nombre maximal d'appels en attente atteint).",
-  },
-  { key: "phoneNumber", label: "Numéro" },
-  {
-    key: "canBeDeleted",
-    label: "Supprimable ?",
-    tooltip: "Oui si la file n'a aucun agent assigné ET aucun numéro de téléphone attribué. Dans ce cas elle peut être supprimée sans impact.",
-    render: (v) => {
-      const val = String(v);
-      if (val === "Oui") return <span className="badge badge-danger">Oui</span>;
-      if (val === "Non") return <span className="badge badge-success">Non</span>;
-      return <span className="badge">{val || "—"}</span>;
-    },
-  },
-];
 
 function AgentDetail({ row }: { row: CallQueue }) {
   const hasAgents = row.agents && row.agents.length > 0;
@@ -86,6 +60,36 @@ function AgentDetail({ row }: { row: CallQueue }) {
 }
 
 export default function CallQueuesTab({ data }: Props) {
+  const { t } = useI18n();
+
+  const columns: Column<CallQueue>[] = [
+    { key: "name",          label: t("tabs.callQueues.name") },
+    { key: "routingMethod", label: t("tabs.callQueues.routing") },
+    { key: "agentCount",    label: t("tabs.callQueues.agents") },
+    {
+      key: "timeoutAction",
+      label: t("tabs.callQueues.timeout"),
+      tooltip: "Action effectuée lorsqu'un appel attend trop longtemps dans la file (délai d'attente dépassé).",
+    },
+    {
+      key: "overflowAction",
+      label: t("tabs.callQueues.overflow"),
+      tooltip: "Action effectuée lorsque la file d'attente est pleine (nombre maximal d'appels en attente atteint).",
+    },
+    { key: "phoneNumber", label: "Numéro" },
+    {
+      key: "canBeDeleted",
+      label: "Supprimable ?",
+      tooltip: "Oui si la file n'a aucun agent assigné ET aucun numéro de téléphone attribué. Dans ce cas elle peut être supprimée sans impact.",
+      render: (v) => {
+        const val = String(v);
+        if (val === "Oui") return <span className="badge badge-danger">Oui</span>;
+        if (val === "Non") return <span className="badge badge-success">Non</span>;
+        return <span className="badge">{val || "—"}</span>;
+      },
+    },
+  ];
+
   return (
     <>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>

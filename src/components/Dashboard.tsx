@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { DashboardData, TabId } from "../types";
+import { useI18n } from "../i18n";
 import PhoneUsersTab from "./tabs/PhoneUsersTab";
 import FreeNumbersTab from "./tabs/FreeNumbersTab";
 import OrphanLicensesTab from "./tabs/OrphanLicensesTab";
@@ -35,17 +36,13 @@ interface NavItem {
   section: string;
 }
 
-const SECTIONS = [
-  { id: "telephonie", label: "TELEPHONIE" },
-  { id: "licences", label: "LICENCES" },
-  { id: "ressources", label: "RESSOURCES" },
-];
 
 type PsState = "idle" | "installing" | "done" | "error";
 
 const PS_MODULE_MARKER = "Module PowerShell MicrosoftTeams indisponible";
 
 export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onDisconnect, onSetup }: Props) {
+  const { t, lang } = useI18n();
   const [activeTab, setActiveTab] = useState<TabId>("phoneUsers");
   const [psState, setPsState] = useState<PsState>("idle");
   const [psMsg, setPsMsg] = useState("");
@@ -56,19 +53,25 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
   const [checkState, setCheckState] = useState<"idle" | "checking" | "uptodate" | "error">("idle");
   const [showChangelog, setShowChangelog] = useState(false);
 
+  const sections = [
+    { id: "telephonie", label: t("nav.sections.telephony") },
+    { id: "licences",   label: t("nav.sections.licenses") },
+    { id: "ressources", label: t("nav.sections.resources") },
+  ];
+
   useEffect(() => {
     invoke<string>("get_platform").then(setPlatform).catch(() => {});
     getVersion().then(setAppVersion).catch(() => {});
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const result = await invoke<{ version: string; notes?: string } | null>("check_update");
         if (result) setUpdateInfo(result);
       } catch { /* réseau indisponible — silencieux */ }
     }, 5000);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, []);
 
   async function handleManualCheck() {
@@ -127,8 +130,8 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
       setPsState("done");
       setPsMsg(
         result === "installed"
-          ? "Module installé avec succès. Cliquez sur Actualiser pour recharger les données."
-          : "Module déjà fonctionnel. Cliquez sur Actualiser pour recharger les données."
+          ? t("ps.installed")
+          : t("ps.alreadyInstalled")
       );
     } catch (e) {
       setPsState("error");
@@ -144,16 +147,16 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
   if (showPsBanner && !psInfo) { loadPsInfo(); }
 
   const nav: NavItem[] = [
-    { id: "directoryUsers", label: "Tous les utilisateurs", section: "telephonie", icon: <PhoneIcon />, count: () => data?.directoryUsers.length ?? 0 },
-    { id: "phoneUsers", label: "Utilisateurs", section: "telephonie", icon: <PhoneIcon />, count: () => data?.phoneUsers.length ?? 0 },
-    { id: "freeNumbers", label: "Numéros libres", section: "telephonie", icon: <HashIcon />, count: () => data?.freeNumbers.length ?? 0, badge: (data?.freeNumbers.length ?? 0) > 0 ? "warn" : undefined },
-    { id: "orphanLicenses", label: "Utilisateurs sans numéro", section: "telephonie", icon: <AlertIcon />, count: () => data?.orphanLicenses.length ?? 0, badge: (data?.orphanLicenses.length ?? 0) > 0 ? "danger" : undefined },
-    { id: "userLicenses", label: "Licences utilisateurs", section: "licences", icon: <CreditCardIcon />, count: () => data?.userLicenses.length ?? 0 },
-    { id: "subscriptions", label: "Abonnements", section: "licences", icon: <BarChartIcon />, count: () => data?.subscriptions.length ?? 0 },
-    { id: "callQueues", label: "Files d'attente", section: "ressources", icon: <PhoneCallIcon />, count: () => data?.callQueues.length ?? 0 },
-    { id: "autoAttendants", label: "Standards automatiques", section: "ressources", icon: <BotIcon />, count: () => data?.autoAttendants.length ?? 0 },
-    { id: "resourceAccounts", label: "Comptes ressources", section: "ressources", icon: <WrenchIcon />, count: () => data?.resourceAccounts.length ?? 0 },
-    { id: "cartographie", label: "Cartographie", section: "ressources", icon: <MapIcon />, count: () => -1 },
+    { id: "directoryUsers", label: t("nav.tabs.allUsers"), section: "telephonie", icon: <PhoneIcon />, count: () => data?.directoryUsers.length ?? 0 },
+    { id: "phoneUsers", label: t("nav.tabs.phoneUsers"), section: "telephonie", icon: <PhoneIcon />, count: () => data?.phoneUsers.length ?? 0 },
+    { id: "freeNumbers", label: t("nav.tabs.freeNumbers"), section: "telephonie", icon: <HashIcon />, count: () => data?.freeNumbers.length ?? 0, badge: (data?.freeNumbers.length ?? 0) > 0 ? "warn" : undefined },
+    { id: "orphanLicenses", label: t("nav.tabs.orphanLicenses"), section: "telephonie", icon: <AlertIcon />, count: () => data?.orphanLicenses.length ?? 0, badge: (data?.orphanLicenses.length ?? 0) > 0 ? "danger" : undefined },
+    { id: "userLicenses", label: t("nav.tabs.userLicenses"), section: "licences", icon: <CreditCardIcon />, count: () => data?.userLicenses.length ?? 0 },
+    { id: "subscriptions", label: t("nav.tabs.subscriptions"), section: "licences", icon: <BarChartIcon />, count: () => data?.subscriptions.length ?? 0 },
+    { id: "callQueues", label: t("nav.tabs.callQueues"), section: "ressources", icon: <PhoneCallIcon />, count: () => data?.callQueues.length ?? 0 },
+    { id: "autoAttendants", label: t("nav.tabs.autoAttendants"), section: "ressources", icon: <BotIcon />, count: () => data?.autoAttendants.length ?? 0 },
+    { id: "resourceAccounts", label: t("nav.tabs.resourceAccounts"), section: "ressources", icon: <WrenchIcon />, count: () => data?.resourceAccounts.length ?? 0 },
+    { id: "cartographie", label: t("nav.tabs.cartography"), section: "ressources", icon: <MapIcon />, count: () => -1 },
   ];
 
   function renderTab() {
@@ -193,7 +196,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
         </div>
 
         <nav style={{ flex: 1, overflowY: "auto", padding: "12px 8px" }}>
-          {SECTIONS.map((section) => {
+          {sections.map((section) => {
             const items = nav.filter((n) => n.section === section.id);
             return (
               <div key={section.id} style={{ marginBottom: 16 }}>
@@ -224,15 +227,15 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
         <div style={{ padding: "10px 8px 14px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={openLogs}>
             <LogIcon />
-            Voir les logs
+            {t("sidebar.viewLogs")}
           </button>
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={onSetup}>
             <SettingsIcon />
-            Paramètres
+            {t("sidebar.settings")}
           </button>
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={onDisconnect}>
             <LogoutIcon />
-            Déconnexion
+            {t("sidebar.disconnect")}
           </button>
         </div>
 
@@ -244,7 +247,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
             disabled={checkState === "checking"}
           >
             {checkState === "checking" ? <SpinIcon /> : checkState === "uptodate" ? <CheckIcon /> : <UpdateCheckIcon />}
-            {checkState === "checking" ? "Vérification…" : checkState === "uptodate" ? "Déjà à jour" : checkState === "error" ? "Erreur réseau" : "Vérifier les mises à jour"}
+            {checkState === "checking" ? t("sidebar.checking") : checkState === "uptodate" ? t("sidebar.upToDate") : checkState === "error" ? t("sidebar.networkError") : t("sidebar.checkUpdates")}
           </button>
         </div>
 
@@ -257,7 +260,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
             onClick={() => setShowChangelog(true)}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, padding: 0, textDecoration: "underline" }}
           >
-            Notes
+            {t("sidebar.releaseNotes")}
           </button>
         </div>
       </aside>
@@ -272,16 +275,16 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
             <h2 style={{ color: "var(--text-1)", fontSize: 15, fontWeight: 600, margin: 0 }}>{tabLabel}</h2>
             {(runtimeError || (data && (data.errors.length > 0 || otherWarnings.length > 0 || psWarning))) && (
               <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                {runtimeError && <span className="badge badge-danger" title={runtimeError}>Erreur UI : {runtimeError.slice(0, 80)}{runtimeError.length > 80 ? "…" : ""}</span>}
-                {data?.errors.map((e, i) => <span key={`e${i}`} className="badge badge-danger" title={e}>Erreur : {e.slice(0, 60)}{e.length > 60 ? "…" : ""}</span>)}
+                {runtimeError && <span className="badge badge-danger" title={runtimeError}>{t("topbar.errorUi") + " :"} {runtimeError.slice(0, 80)}{runtimeError.length > 80 ? "…" : ""}</span>}
+                {data?.errors.map((e, i) => <span key={`e${i}`} className="badge badge-danger" title={e}>{t("topbar.error") + " :"} {e.slice(0, 60)}{e.length > 60 ? "…" : ""}</span>)}
                 {otherWarnings.map((w, i) => <span key={`w${i}`} className="badge badge-warning" title={w}>{w.slice(0, 80)}{w.length > 80 ? "…" : ""}</span>)}
-                {psWarning && psState !== "done" && <span className="badge badge-warning" title={psWarning}>Module PS Teams : voir onglet CQ/AA</span>}
+                {psWarning && psState !== "done" && <span className="badge badge-warning" title={psWarning}>{t("topbar.psModuleWarning")}</span>}
               </div>
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-            {lastRefresh && <span style={{ color: "var(--text-3)", fontSize: 12, whiteSpace: "nowrap" }}>Actualisé le {lastRefresh.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })} à {lastRefresh.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
-            <button className="btn btn-primary" onClick={onRefresh} disabled={loading}>{loading ? <SpinIcon /> : <RefreshIcon />}{loading ? "Chargement..." : "Actualiser"}</button>
+            {lastRefresh && <span style={{ color: "var(--text-3)", fontSize: 12, whiteSpace: "nowrap" }}>{t("topbar.refreshedAt")} {lastRefresh.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US", { day: "2-digit", month: "2-digit", year: "numeric" })} {t("topbar.at")} {lastRefresh.toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</span>}
+            <button className="btn btn-primary" onClick={onRefresh} disabled={loading}>{loading ? <SpinIcon /> : <RefreshIcon />}{loading ? t("topbar.loading") : t("topbar.refresh")}</button>
           </div>
         </header>
 
@@ -291,18 +294,18 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
               <div style={{ color: "var(--accent-warn, #f59e0b)", flexShrink: 0, marginTop: 1 }}><AlertIcon /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: "var(--text-1)" }}>
-                  Module PowerShell MicrosoftTeams requis
+                  {t("ps.moduleRequired")}
                 </p>
                 {psState === "idle" && !needsSecret && (
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
-                    Ce module est nécessaire pour récupérer les données de cet onglet via PowerShell.
+                    {t("ps.moduleDesc")}
                     {psWarning && <> L'erreur détectée est probablement une dépendance manquante ou cassée.</>}
                   </p>
                 )}
                 {needsSecret && (
                   <div style={{ margin: "6px 0 0", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 6, padding: "10px 12px" }}>
                     <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", fontWeight: 600 }}>
-                      Un Client Secret Azure est requis pour les onglets CQ/AA
+                      {t("ps.clientSecretRequired")}
                     </p>
                     <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
                       Le module PowerShell MicrosoftTeams v7.x ne supporte plus l'authentification déléguée non-interactive.
@@ -325,7 +328,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                 )}
                 {psState === "installing" && (
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)" }}>
-                    Installation en cours… (cela peut prendre 1 à 3 minutes)
+                    {t("ps.installing")}
                   </p>
                 )}
                 {psState === "done" && (
@@ -336,8 +339,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                 )}
                 {psState === "error" && needsPs7 && (
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-danger, #ef4444)" }}>
-                    PowerShell 7 est requis pour le module MicrosoftTeams (DLL incompatible avec PS 5.1).
-                    Installez-le gratuitement depuis Microsoft.
+                    {t("ps.ps7Required")}
                   </p>
                 )}
                 {platform !== "windows" && (
@@ -352,22 +354,22 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
                   {needsSecret && (
                     <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onSetup}>
-                      <SettingsIcon /> Configuration
+                      <SettingsIcon /> {t("ps.configuration")}
                     </button>
                   )}
                   {platform === "windows" && !needsSecret && (psState === "idle" || (psState === "error" && !needsPs7)) && (
                     <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleInstallModule}>
-                      Installer le module
+                      {t("ps.installModule")}
                     </button>
                   )}
                   {platform === "windows" && psState === "error" && needsPs7 && (
                     <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => openUrl(ps7Url)}>
-                      Télécharger PowerShell 7
+                      {t("ps.downloadPs7")}
                     </button>
                   )}
                   {psState === "installing" && (
                     <button className="btn btn-primary" style={{ fontSize: 12 }} disabled>
-                      <SpinIcon /> Installation…
+                      <SpinIcon /> {t("ps.installing")}
                     </button>
                   )}
                 </div>

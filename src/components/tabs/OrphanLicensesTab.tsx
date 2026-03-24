@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import DataTable, { type Column } from "../DataTable";
 import type { OrphanLicense, FreeNumber } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props {
   data: OrphanLicense[];
@@ -15,6 +16,7 @@ interface ActionState {
 }
 
 export default function OrphanLicensesTab({ data, freeNumbers, onActionDone }: Props) {
+  const { t } = useI18n();
   const [modalUser, setModalUser] = useState<OrphanLicense | null>(null);
   const [selectedNumber, setSelectedNumber] = useState("");
   const [selectedType, setSelectedType] = useState("");
@@ -48,9 +50,9 @@ export default function OrphanLicensesTab({ data, freeNumbers, onActionDone }: P
   }
 
   const columns: Column<OrphanLicense>[] = [
-    { key: "displayName", label: "Nom" },
-    { key: "upn",         label: "UPN" },
-    { key: "licenses",    label: "Licences" },
+    { key: "displayName", label: t("tabs.orphanLicenses.name") },
+    { key: "upn",         label: t("tabs.orphanLicenses.upn") },
+    { key: "licenses",    label: t("tabs.orphanLicenses.licenses") },
     {
       key: "status", label: "Statut",
       render: (v) => <span className="badge badge-warning">{String(v)}</span>,

@@ -700,6 +700,14 @@ async fn install_ps_module() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn set_debug_mode(enabled: bool) {
+    crate::logger::set_enabled(enabled);
+    if enabled {
+        crate::logger::info("Mode débogage activé.");
+    }
+}
+
+#[tauri::command]
 fn log_frontend_error(context: String, message: String) {
     logger::error(&format!("Frontend - {context} : {message}"));
 }
@@ -755,6 +763,7 @@ pub fn run() {
             pick_log_folder,
             get_log_path,
             log_frontend_error,
+            set_debug_mode,
             updater::check_update,
             updater::install_update,
         ])
