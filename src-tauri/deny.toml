@@ -35,7 +35,9 @@ yanked = "warn"
 
 # ── Licences ─────────────────────────────────────────────────────────────────
 [licenses]
-# Licences permissives standard
+# Ce projet est distribué sous GPL-3.0.
+# Les dépendances ci-dessous utilisent des licences permissives (MIT, Apache, BSD…)
+# toutes compatibles avec la GPL-3.0.
 allow = [
   "MIT",
   "MIT-0",              # MIT sans clause d'attribution (dunce)

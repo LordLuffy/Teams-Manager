@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { DashboardData, TabId } from "../types";
 import PhoneUsersTab from "./tabs/PhoneUsersTab";
@@ -50,9 +51,15 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
   const [psInfo, setPsInfo] = useState<string>("");
   const [platform, setPlatform] = useState<string>("windows");
   const [updateInfo, setUpdateInfo] = useState<{ version: string; notes?: string } | null>(null);
+  const [appVersion, setAppVersion] = useState<string>("…");
+  const [checkState, setCheckState] = useState<"idle" | "checking" | "uptodate" | "error">("idle");
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [changelogNotes, setChangelogNotes] = useState<string | null>(null);
+  const [changelogLoading, setChangelogLoading] = useState(false);
 
   useEffect(() => {
     invoke<string>("get_platform").then(setPlatform).catch(() => {});
+    getVersion().then(setAppVersion).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -64,6 +71,55 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
     }, 5000);
     return () => clearTimeout(t);
   }, []);
+
+  async function handleManualCheck() {
+    if (checkState === "checking") return;
+    setCheckState("checking");
+    try {
+      const result = await invoke<{ version: string; notes?: string } | null>("check_update");
+      if (result) {
+        setUpdateInfo(result);
+        setCheckState("idle");
+      } else {
+        setCheckState("uptodate");
+        setTimeout(() => setCheckState("idle"), 3000);
+      }
+    } catch {
+      setCheckState("error");
+      setTimeout(() => setCheckState("idle"), 3000);
+    }
+  }
+
+  async function handleOpenChangelog() {
+    setShowChangelog(true);
+    if (changelogNotes !== null) return;
+    setChangelogLoading(true);
+    try {
+      const res = await fetch("https://api.github.com/repos/LordLuffy/Teams-Manager/releases?per_page=20");
+      if (res.ok) {
+        const releases: { tag_name: string; name: string; body: string }[] = await res.json();
+        if (releases.length === 0) {
+          setChangelogNotes("Aucune release publiée.");
+        } else {
+          const formatted = releases
+            .map(r => {
+              const title = r.name || r.tag_name;
+              const body = r.body?.trim() || "Aucune note pour cette version.";
+              const separator = "─".repeat(48);
+              return `${title}\n${separator}\n${body}`;
+            })
+            .join("\n\n\n");
+          setChangelogNotes(formatted);
+        }
+      } else {
+        setChangelogNotes("Impossible de récupérer les notes de version.");
+      }
+    } catch {
+      setChangelogNotes("Impossible de récupérer les notes de version (réseau indisponible).");
+    } finally {
+      setChangelogLoading(false);
+    }
+  }
 
   const psWarning = data?.warnings.find(w => w.includes(PS_MODULE_MARKER));
   const otherWarnings = data?.warnings.filter(w => !w.includes(PS_MODULE_MARKER)) ?? [];
@@ -210,7 +266,61 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
             Déconnexion
           </button>
         </div>
+
+        <div style={{ padding: "8px 8px 0", borderTop: "1px solid var(--border)" }}>
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", justifyContent: "center", color: checkState === "uptodate" ? "var(--accent)" : checkState === "error" ? "var(--text-danger, #ef4444)" : undefined }}
+            onClick={handleManualCheck}
+            disabled={checkState === "checking"}
+          >
+            {checkState === "checking" ? <SpinIcon /> : checkState === "uptodate" ? <CheckIcon /> : <UpdateCheckIcon />}
+            {checkState === "checking" ? "Vérification…" : checkState === "uptodate" ? "Déjà à jour" : checkState === "error" ? "Erreur réseau" : "Vérifier les mises à jour"}
+          </button>
+        </div>
+
+        <div style={{ padding: "6px 8px 10px", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <span style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", fontWeight: 600 }}>
+            Teams Manager v{appVersion}
+          </span>
+          <span style={{ color: "var(--text-3)", fontSize: 10 }}>·</span>
+          <button
+            onClick={handleOpenChangelog}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, padding: 0, textDecoration: "underline" }}
+          >
+            Notes
+          </button>
+        </div>
       </aside>
+
+      {showChangelog && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={() => setShowChangelog(false)}
+        >
+          <div
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, width: 500, maxHeight: "65vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notes de version</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Teams Manager v{appVersion}</p>
+              </div>
+              <button onClick={() => setShowChangelog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, padding: "0 4px", lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
+              {changelogLoading ? (
+                <div style={{ display: "flex", justifyContent: "center", padding: 24 }}><SpinIcon /></div>
+              ) : (
+                <pre style={{ margin: 0, fontSize: 12, color: "var(--text-2)", whiteSpace: "pre-wrap", lineHeight: 1.7, fontFamily: "inherit" }}>
+                  {changelogNotes}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-card)", flexShrink: 0, gap: 12 }}>
@@ -343,3 +453,5 @@ function LogIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill
 function SpinIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>; }
 function SettingsIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
 function MapIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></svg>; }
+function UpdateCheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /></svg>; }
+function CheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12" /></svg>; }

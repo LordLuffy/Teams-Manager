@@ -10,6 +10,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -18,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install frontend dependencies
@@ -28,7 +30,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
@@ -40,8 +42,37 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Teams Manager ${{ github.ref_name }}
+          releaseName: 'Teams Manager ${{ github.ref_name }}'
           releaseBody: |
-            Voir les notes de version ci-dessous.
+            ## Teams Manager v1.0.0 — Première version publique
+
+            Application desktop Windows pour auditer les licences Microsoft 365 et les ressources de téléphonie Teams, sans passer par le portail d'administration.
+
+            ### Onglets disponibles
+
+            **Téléphonie**
+            - **Tous les utilisateurs** — annuaire complet des utilisateurs Azure AD
+            - **Utilisateurs** — utilisateurs avec un numéro de téléphone Teams assigné
+            - **Numéros libres** — numéros PSTN non assignés dans le tenant
+            - **Utilisateurs sans numéro** — utilisateurs avec une licence téléphonie mais sans numéro
+
+            **Licences**
+            - **Licences utilisateurs** — détail des licences Microsoft 365 par utilisateur
+            - **Abonnements** — inventaire des abonnements du tenant (quantités, consommation)
+
+            **Ressources**
+            - **Files d'attente** — liste des call queues Teams (via PowerShell MicrosoftTeams)
+            - **Standards automatiques** — liste des auto attendants (via PowerShell MicrosoftTeams)
+            - **Comptes ressources** — comptes de ressources MCOEV_VIRTUALUSER
+            - **Cartographie** — vue consolidée des liaisons numéros / comptes ressources / files d'attente
+
+            ### Fonctionnalités générales
+
+            - Authentification Microsoft via device code flow (aucun mot de passe stocké)
+            - Identifiants et tokens stockés dans le Gestionnaire d'informations d'identification Windows (chiffré)
+            - Export CSV dans chaque onglet
+            - Logs applicatifs avec chemin personnalisable
+            - Mise à jour automatique signée via GitHub Releases
+            - Vérification manuelle des mises à jour depuis la sidebar
           releaseDraft: false
           prerelease: false

@@ -1,5 +1,8 @@
 # Teams License & Telephony Manager
 
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/LordLuffy/Teams-Manager)](https://github.com/LordLuffy/Teams-Manager/releases/latest)
+
 Application desktop **Tauri 2 + React + TypeScript + Rust** pour auditer les licences Microsoft 365, les numéros Teams et les ressources de téléphonie.
 
 ---
@@ -11,7 +14,7 @@ Application desktop **Tauri 2 + React + TypeScript + Rust** pour auditer les lic
 | Outil | Version | Installation |
 |-------|---------|--------------|
 | Rust  | stable  | `rustup.rs`  |
-| Node.js | LTS 20+ | `nodejs.org` |
+| Node.js | 24+ | `nodejs.org` |
 | Tauri CLI | v2 | `cargo install tauri-cli` |
 
 Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visual C++ Build Tools.
@@ -43,6 +46,7 @@ TeamsAnalysis/
 │       ├── SetupScreen.tsx     # Configuration Tenant/Client ID
 │       ├── AuthScreen.tsx      # Device code flow UI
 │       ├── Dashboard.tsx       # Sidebar + topbar + onglets
+│       ├── UpdateBanner.tsx    # Bannière mise à jour automatique
 │       ├── DataTable.tsx       # Table générique (tri, recherche, export)
 │       └── tabs/               # 9 onglets métier
 │           ├── DirectoryUsersTab.tsx
@@ -60,8 +64,10 @@ TeamsAnalysis/
     │   ├── lib.rs              # Commandes Tauri + AppState
     │   ├── auth.rs             # Device code flow Microsoft
     │   ├── graph.rs            # Appels Graph API + scripts PowerShell
+    │   ├── updater.rs          # Mise à jour automatique (GitHub Releases)
     │   └── logger.rs           # Logs applicatifs fichier
-    └── Cargo.toml
+    ├── Cargo.toml
+    └── deny.toml               # Audit licences et vulnérabilités Rust
 ```
 
 ### Fichiers de données
@@ -159,6 +165,13 @@ cargo tauri build
 
 L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundle/`.
 
+### Vérification des dépendances Rust
+
+```bash
+cd src-tauri
+cargo deny check
+```
+
 ---
 
 ## 6. Utilisation
@@ -181,6 +194,12 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
   - Ajouter / modifier le **Client Secret** (stocké de façon sécurisée)
   - Changer le **dossier des logs**
 
+### Mises à jour automatiques
+
+L'application vérifie automatiquement les nouvelles versions au démarrage (après 5 secondes). Si une mise à jour est disponible, une bannière s'affiche dans la sidebar avec un bouton **Installer**. L'application redémarre automatiquement après installation.
+
+Les mises à jour sont signées cryptographiquement et distribuées via [GitHub Releases](https://github.com/LordLuffy/Teams-Manager/releases).
+
 ### Résolution des problèmes — onglets Files d'attente / Standards automatiques
 
 | Symptôme | Cause probable | Solution |
@@ -195,3 +214,9 @@ L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundl
 Les logs sont accessibles via le bouton **Voir les logs** dans la sidebar, ou manuellement dans :
 - Windows : `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log`
 - macOS : `~/Library/Logs/com.teams-manager.desktop/teams-manager.log`
+
+---
+
+## 7. Licence
+
+Ce projet est distribué sous licence [GPL-3.0](LICENSE).
