@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,7 +55,26 @@ jobs:
               - Added multilingual support : FR / EN / DE / ES
               - Added a debug mode
 
-
             Please feel free to submit your feedback via [GitHub Issues](https://github.com/LordLuffy/Teams-Manager/issues) to help improve future versions.
           releaseDraft: false
           prerelease: false
+
+      - name: Update README badges
+        run: node scripts/update-badges.cjs
+
+      - name: Commit updated README
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "No badge changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update README badges for ${{ github.ref_name }}"
+
+      - name: Push README changes to default branch
+        shell: bash
+        run: |
+          git push origin HEAD:${{ github.event.repository.default_branch }}

@@ -127,7 +127,7 @@ export default function ChangelogModal({ appVersion, onClose }: Props) {
                   {release.published_at && (
                     <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>
                       {new Date(release.published_at).toLocaleDateString(
-                        { fr: "fr-FR", es: "es-ES", de: "de-DE" }[lang] ?? "en-GB",
+                        { en: "en-EN", fr: "fr-FR", es: "es-ES", de: "de-DE" }[lang] ?? "en-GB",
                         { day: "2-digit", month: "short", year: "numeric" }
                       )}
                     </span>

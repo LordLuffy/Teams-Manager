@@ -324,7 +324,7 @@ export default function SettingsModal({ onConnect, onClose }: Props) {
 
 function Section({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
-    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14, "&:first-child": { borderTop: "none" } as React.CSSProperties }}>
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
       <button onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--text-2)", fontSize: 13, fontWeight: 500, width: "100%", textAlign: "left", marginBottom: open ? 12 : 0 }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>
           <polyline points="9 18 15 12 9 6" />

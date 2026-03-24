@@ -250,7 +250,7 @@ const en = {
       desc: "Consolidated view of numbers, resource accounts, and queues",
     },
   },
-} as const;
+};
 
 export default en;
 export type Translations = typeof en;

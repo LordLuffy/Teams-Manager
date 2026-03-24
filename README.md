@@ -1,7 +1,7 @@
 # Teams Manager
 
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/LordLuffy/Teams-Manager)](https://github.com/LordLuffy/Teams-Manager/releases/latest)
+<!-- BADGES:START -->
+<!-- BADGES:END -->
 
 Application desktop **Windows** — **Tauri 2 + React + TypeScript + Rust** pour auditer les licences Microsoft 365, les numéros Teams et les ressources de téléphonie.
 
