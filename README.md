@@ -1,9 +1,9 @@
-# Teams License & Telephony Manager
+# Teams Manager
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/LordLuffy/Teams-Manager)](https://github.com/LordLuffy/Teams-Manager/releases/latest)
 
-Application desktop **Tauri 2 + React + TypeScript + Rust** pour auditer les licences Microsoft 365, les numéros Teams et les ressources de téléphonie.
+Application desktop **Windows** — **Tauri 2 + React + TypeScript + Rust** pour auditer les licences Microsoft 365, les numéros Teams et les ressources de téléphonie.
 
 ---
 
@@ -17,7 +17,7 @@ Application desktop **Tauri 2 + React + TypeScript + Rust** pour auditer les lic
 | Node.js | 24+ | `nodejs.org` |
 | Tauri CLI | v2 | `cargo install tauri-cli` |
 
-Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visual C++ Build Tools.
+Dépendances système : WebView2 (préinstallé sur Windows 11) et Visual C++ Build Tools.
 
 ### Prérequis runtime (onglets Files d'attente & Standards automatiques)
 
@@ -26,9 +26,7 @@ Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visua
 | **PowerShell 7** (`pwsh`) | Le module MicrosoftTeams v5+ embarque des DLL .NET 8 incompatibles avec PowerShell 5.1 (Windows built-in) | [aka.ms/powershell](https://aka.ms/powershell) |
 | **Module PowerShell MicrosoftTeams** | Récupération des Files d'attente et Standards automatiques via `Get-CsCallQueue` / `Get-CsAutoAttendant` | Installé automatiquement par l'application au démarrage |
 
-> **Windows** : L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Standards automatiques.
->
-> **macOS** : L'application est compatible macOS pour tous les onglets Graph API. Les onglets Files d'attente et Standards automatiques nécessitent [PowerShell Core (`pwsh`)](https://github.com/PowerShell/PowerShell/releases) et le module MicrosoftTeams installés manuellement.
+> L'application détecte `pwsh.exe` au démarrage. Si PowerShell 7 est absent, un bouton "Télécharger PowerShell 7" s'affiche dans les onglets Files d'attente et Standards automatiques.
 
 ---
 
@@ -39,6 +37,7 @@ Dépendances système Windows : WebView2 (préinstallé sur Windows 11) et Visua
 ```
 TeamsAnalysis/
 ├── src/                        # Frontend React
+│   ├── main.tsx                # Point d'entrée React
 │   ├── App.tsx                 # Routing setup/auth/dashboard
 │   ├── types.ts                # Interfaces TypeScript
 │   ├── index.css               # CSS variables + utility classes
@@ -48,7 +47,7 @@ TeamsAnalysis/
 │       ├── Dashboard.tsx       # Sidebar + topbar + onglets
 │       ├── UpdateBanner.tsx    # Bannière mise à jour automatique
 │       ├── DataTable.tsx       # Table générique (tri, recherche, export)
-│       └── tabs/               # 9 onglets métier
+│       └── tabs/               # 10 onglets métier
 │           ├── DirectoryUsersTab.tsx
 │           ├── PhoneUsersTab.tsx
 │           ├── FreeNumbersTab.tsx
@@ -57,7 +56,8 @@ TeamsAnalysis/
 │           ├── SubscriptionsTab.tsx
 │           ├── CallQueuesTab.tsx
 │           ├── AutoAttendantsTab.tsx
-│           └── ResourceAccountsTab.tsx
+│           ├── ResourceAccountsTab.tsx
+│           └── CartographieTab.tsx
 └── src-tauri/                  # Backend Rust
     ├── src/
     │   ├── main.rs             # Point d'entrée Tauri
@@ -74,8 +74,8 @@ TeamsAnalysis/
 
 | Donnée | Emplacement |
 |--------|-------------|
-| Chemin de logs personnalisé | Windows : `%APPDATA%\com.teams-manager.desktop\config.json` / macOS : `~/Library/Application Support/com.teams-manager.desktop/config.json` |
-| Logs applicatifs | Windows : `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log` / macOS : `~/Library/Logs/com.teams-manager.desktop/teams-manager.log` |
+| Chemin de logs personnalisé | `%APPDATA%\com.teams-manager.desktop\config.json` |
+| Logs applicatifs | `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log` |
 | **Tenant ID, Client ID, Client Secret** | **Gestionnaire d'informations d'identification Windows** (chiffré, jamais sur disque en clair) |
 | Refresh token Microsoft | **Gestionnaire d'informations d'identification Windows** (chiffré, découpé en segments) |
 
@@ -151,7 +151,7 @@ Les cmdlets PowerShell `Get-CsCallQueue` / `Get-CsAutoAttendant` nécessitent un
 npm install
 
 # Lancer en mode dev (hot-reload)
-cargo tauri dev
+npm run tauri dev
 ```
 
 La fenêtre s'ouvre sur `http://localhost:1420`. Modifiez les fichiers `src/` et le rechargement est instantané.
@@ -160,7 +160,7 @@ La fenêtre s'ouvre sur `http://localhost:1420`. Modifiez les fichiers `src/` et
 
 ```bash
 npm install
-cargo tauri build
+npm run tauri build
 ```
 
 L'installateur et l'exécutable se trouvent dans `src-tauri/target/release/bundle/`.
@@ -198,7 +198,7 @@ cargo deny check
 
 L'application vérifie automatiquement les nouvelles versions au démarrage (après 5 secondes). Si une mise à jour est disponible, une bannière s'affiche dans la sidebar avec un bouton **Installer**. L'application redémarre automatiquement après installation.
 
-Les mises à jour sont signées cryptographiquement et distribuées via [GitHub Releases](https://github.com/LordLuffy/Teams-Manager/releases).
+Les mises à jour sont signées cryptographiquement et distribuées via [GitHub Releases](https://github.com/LordLuffy/Teams-Manager/releases). Un bouton **Vérifier les mises à jour** dans la sidebar permet de lancer une vérification manuelle, et le lien **Notes** affiche l'historique complet des versions.
 
 ### Résolution des problèmes — onglets Files d'attente / Standards automatiques
 
@@ -212,11 +212,4 @@ Les mises à jour sont signées cryptographiquement et distribuées via [GitHub 
 | Bannière orange persistante après configuration | Secret incorrect ou permissions non consenties | Vérifier les permissions et le consentement admin dans Azure |
 
 Les logs sont accessibles via le bouton **Voir les logs** dans la sidebar, ou manuellement dans :
-- Windows : `%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log`
-- macOS : `~/Library/Logs/com.teams-manager.desktop/teams-manager.log`
-
----
-
-## 7. Licence
-
-Ce projet est distribué sous licence [GPL-3.0](LICENSE).
+`%LOCALAPPDATA%\com.teams-manager.desktop\logs\teams-manager.log`

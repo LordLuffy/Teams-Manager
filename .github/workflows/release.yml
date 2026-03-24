@@ -44,35 +44,37 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Teams Manager ${{ github.ref_name }}'
           releaseBody: |
-            ## Teams Manager v1.0.0 — Première version publique
+            Application desktop **Windows** dédiée à l'audit des licences Microsoft 365 et des ressources de téléphonie Teams, sans passer par le portail d'administration Microsoft.
 
-            Application desktop Windows pour auditer les licences Microsoft 365 et les ressources de téléphonie Teams, sans passer par le portail d'administration.
 
-            ### Onglets disponibles
+            ## 📑 Onglets disponibles
 
-            **Téléphonie**
+            ### ☎️ Téléphonie
             - **Tous les utilisateurs** — annuaire complet des utilisateurs Azure AD
-            - **Utilisateurs** — utilisateurs avec un numéro de téléphone Teams assigné
-            - **Numéros libres** — numéros PSTN non assignés dans le tenant
-            - **Utilisateurs sans numéro** — utilisateurs avec une licence téléphonie mais sans numéro
+            - **Utilisateurs** — utilisateurs disposant d'un numéro de téléphone Teams actif
+            - **Numéros libres** — inventaire des numéros PSTN non assignés dans le tenant
+            - **Utilisateurs sans numéro** — utilisateurs avec licence téléphonie mais sans numéro attribué
 
-            **Licences**
+            ### 📦 Licences
             - **Licences utilisateurs** — détail des licences Microsoft 365 par utilisateur
-            - **Abonnements** — inventaire des abonnements du tenant (quantités, consommation)
+            - **Abonnements** — vue globale des abonnements du tenant (quantités et consommation)
 
-            **Ressources**
-            - **Files d'attente** — liste des call queues Teams (via PowerShell MicrosoftTeams)
-            - **Standards automatiques** — liste des auto attendants (via PowerShell MicrosoftTeams)
-            - **Comptes ressources** — comptes de ressources MCOEV_VIRTUALUSER
-            - **Cartographie** — vue consolidée des liaisons numéros / comptes ressources / files d'attente
+            ### 🧩 Ressources
+            - **Files d'attente** — liste des Call Queues Teams (via PowerShell MicrosoftTeams)
+            - **Standards automatiques** — liste des Auto Attendants (via PowerShell MicrosoftTeams)
+            - **Comptes ressources** — comptes de type MCOEV\_VIRTUALUSER
+            - **Cartographie** — vue consolidée des relations entre numéros, comptes ressources et files d'attente
 
-            ### Fonctionnalités générales
+            ## ⚙️ Fonctionnalités
 
-            - Authentification Microsoft via device code flow (aucun mot de passe stocké)
-            - Identifiants et tokens stockés dans le Gestionnaire d'informations d'identification Windows (chiffré)
-            - Export CSV dans chaque onglet
-            - Logs applicatifs avec chemin personnalisable
-            - Mise à jour automatique signée via GitHub Releases
-            - Vérification manuelle des mises à jour depuis la sidebar
+            - 🔐 **Authentification Microsoft** via Device Code Flow (aucun mot de passe stocké)
+            - 🔑 **Stockage sécurisé** des identifiants et tokens dans le Gestionnaire d'identification Windows
+            - 📤 **Export CSV** disponible dans chaque onglet
+            - 🧾 **Logs applicatifs** avec chemin personnalisable
+            - 🔄 **Mise à jour automatique** signée via GitHub Releases
+            - 🔎 **Vérification manuelle** des mises à jour depuis la sidebar
+
+
+            N'hésitez pas à remonter vos retours via les [Issues GitHub](https://github.com/LordLuffy/Teams-Manager/issues) pour améliorer les prochaines versions.
           releaseDraft: false
           prerelease: false

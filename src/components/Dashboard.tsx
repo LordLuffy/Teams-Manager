@@ -14,6 +14,7 @@ import ResourceAccountsTab from "./tabs/ResourceAccountsTab";
 import DirectoryUsersTab from "./tabs/DirectoryUsersTab";
 import CartographieTab from "./tabs/CartographieTab";
 import UpdateBanner from "./UpdateBanner";
+import ChangelogModal from "./ChangelogModal";
 
 interface Props {
   data: DashboardData | null;
@@ -54,8 +55,6 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
   const [appVersion, setAppVersion] = useState<string>("…");
   const [checkState, setCheckState] = useState<"idle" | "checking" | "uptodate" | "error">("idle");
   const [showChangelog, setShowChangelog] = useState(false);
-  const [changelogNotes, setChangelogNotes] = useState<string | null>(null);
-  const [changelogLoading, setChangelogLoading] = useState(false);
 
   useEffect(() => {
     invoke<string>("get_platform").then(setPlatform).catch(() => {});
@@ -90,36 +89,6 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
     }
   }
 
-  async function handleOpenChangelog() {
-    setShowChangelog(true);
-    if (changelogNotes !== null) return;
-    setChangelogLoading(true);
-    try {
-      const res = await fetch("https://api.github.com/repos/LordLuffy/Teams-Manager/releases?per_page=20");
-      if (res.ok) {
-        const releases: { tag_name: string; name: string; body: string }[] = await res.json();
-        if (releases.length === 0) {
-          setChangelogNotes("Aucune release publiée.");
-        } else {
-          const formatted = releases
-            .map(r => {
-              const title = r.name || r.tag_name;
-              const body = r.body?.trim() || "Aucune note pour cette version.";
-              const separator = "─".repeat(48);
-              return `${title}\n${separator}\n${body}`;
-            })
-            .join("\n\n\n");
-          setChangelogNotes(formatted);
-        }
-      } else {
-        setChangelogNotes("Impossible de récupérer les notes de version.");
-      }
-    } catch {
-      setChangelogNotes("Impossible de récupérer les notes de version (réseau indisponible).");
-    } finally {
-      setChangelogLoading(false);
-    }
-  }
 
   const psWarning = data?.warnings.find(w => w.includes(PS_MODULE_MARKER));
   const otherWarnings = data?.warnings.filter(w => !w.includes(PS_MODULE_MARKER)) ?? [];
@@ -285,7 +254,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
           </span>
           <span style={{ color: "var(--text-3)", fontSize: 10 }}>·</span>
           <button
-            onClick={handleOpenChangelog}
+            onClick={() => setShowChangelog(true)}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, padding: 0, textDecoration: "underline" }}
           >
             Notes
@@ -294,32 +263,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
       </aside>
 
       {showChangelog && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-          onClick={() => setShowChangelog(false)}
-        >
-          <div
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, width: 500, maxHeight: "65vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ padding: "16px 20px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notes de version</h3>
-                <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Teams Manager v{appVersion}</p>
-              </div>
-              <button onClick={() => setShowChangelog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, padding: "0 4px", lineHeight: 1 }}>✕</button>
-            </div>
-            <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
-              {changelogLoading ? (
-                <div style={{ display: "flex", justifyContent: "center", padding: 24 }}><SpinIcon /></div>
-              ) : (
-                <pre style={{ margin: 0, fontSize: 12, color: "var(--text-2)", whiteSpace: "pre-wrap", lineHeight: 1.7, fontFamily: "inherit" }}>
-                  {changelogNotes}
-                </pre>
-              )}
-            </div>
-          </div>
-        </div>
+        <ChangelogModal appVersion={appVersion} onClose={() => setShowChangelog(false)} />
       )}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
