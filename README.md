@@ -1,6 +1,16 @@
 # Teams Manager
 
 <!-- BADGES:START -->
+<p align="center">
+  ![Release](https://img.shields.io/github/v/release/LordLuffy/Teams-Manager?style=for-the-badge)
+  ![License](https://img.shields.io/badge/License-GPL-F4C430?style=for-the-badge)
+  ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)
+  ![Rust](https://img.shields.io/badge/Rust-stable-000000?style=for-the-badge&logo=rust)
+  ![TypeScript](https://img.shields.io/badge/TypeScript-5.5.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+  ![React](https://img.shields.io/badge/React-18.3.1-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+  ![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+  ![CSS](https://img.shields.io/badge/CSS-3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
+</p>
 <!-- BADGES:END -->
 
 Application desktop **Windows** — **Tauri 2 + React + TypeScript + Rust** pour auditer les licences Microsoft 365, les numéros Teams et les ressources de téléphonie.
