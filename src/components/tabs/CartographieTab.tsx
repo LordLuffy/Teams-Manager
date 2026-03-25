@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { DashboardData, AutoAttendant, CallQueue, ResourceAccount } from "../../types";
+import { useI18n } from "../../i18n";
 
 interface Props { data: DashboardData; }
 
@@ -238,12 +239,13 @@ function SvgEdge({ from, to }: { from: GNode; to: GNode }) {
 // ─── Topo Graph component ─────────────────────────────────────────────────────
 
 function TopoGraph({ chains, freeChains }: { chains: Chain[]; freeChains: Chain[] }) {
+  const { t } = useI18n();
   const allChains = useMemo(() => [...chains, ...freeChains], [chains, freeChains]);
 
   if (allChains.length === 0) {
     return (
       <div style={{ padding: "40px 0", textAlign: "center" }}>
-        <p style={{ color: "var(--text-3)", fontSize: 13 }}>Aucune chaîne téléphonique détectée.</p>
+        <p style={{ color: "var(--text-3)", fontSize: 13 }}>{t("tabs.cartography.noChains")}</p>
       </div>
     );
   }
@@ -251,15 +253,14 @@ function TopoGraph({ chains, freeChains }: { chains: Chain[]; freeChains: Chain[
   const { nodes, edges } = useMemo(() => buildGraph(allChains), [allChains]);
   const nodesById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const svgH = GC.PAD_T + allChains.length * (GC.NODE_H + GC.V_GAP) + GC.PAD_B;
-  const COL_LABELS = ["Numéros", "Comptes ressources", "AA / Files d'attente"];
+  const COL_LABELS = [t("tabs.cartography.colNumbers"), t("tabs.cartography.colResources"), t("tabs.cartography.colEntities")];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* hint */}
       <div style={{ background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "10px 14px" }}>
         <p style={{ color: "var(--info)", fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-          Chaque ligne représente un numéro de téléphone. Les nœuds partagés (compte ressource ou AA/CQ relié à plusieurs numéros) convergent verticalement.
-          Scrollez verticalement pour voir tous les nœuds.
+          {t("tabs.cartography.graphHint")}
         </p>
       </div>
 
@@ -309,20 +310,20 @@ function TopoGraph({ chains, freeChains }: { chains: Chain[]; freeChains: Chain[
 
       {/* Legend */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Légende</span>
-        {(["phone", "ra", "aa", "cq"] as GNodeType[]).map((t) => {
-          const labels: Record<GNodeType, string> = { phone: "Numéro", ra: "Compte ressource", aa: "Standard automatique", cq: "File d'attente" };
-          const c = G_COLORS[t];
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("tabs.cartography.legend")}</span>
+        {(["phone", "ra", "aa", "cq"] as GNodeType[]).map((gtype) => {
+          const labels: Record<GNodeType, string> = { phone: t("tabs.cartography.legendPhone"), ra: t("tabs.cartography.legendRa"), aa: t("tabs.cartography.legendAa"), cq: t("tabs.cartography.legendCq") };
+          const c = G_COLORS[gtype];
           return (
-            <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 9px 2px 5px", borderRadius: 20, fontSize: 11, background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+            <span key={gtype} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 9px 2px 5px", borderRadius: 20, fontSize: 11, background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
               <span style={{ width: 18, height: 14, borderRadius: 3, background: c.pill, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 700, color: "#fff" }}>
-                {{ phone: "NUM", ra: "RA", aa: "AA", cq: "CQ" }[t]}
+                {{ phone: "NUM", ra: "RA", aa: "AA", cq: "CQ" }[gtype]}
               </span>
-              {labels[t]}
+              {labels[gtype]}
             </span>
           );
         })}
-        <span style={{ fontSize: 10, color: "#f59e0b", marginLeft: 4 }}>⚠ = RA sans licence</span>
+        <span style={{ fontSize: 10, color: "#f59e0b", marginLeft: 4 }}>⚠ = {t("tabs.cartography.raNoLicense")}</span>
       </div>
     </div>
   );
@@ -400,6 +401,7 @@ function flowLabel(flow: string) {
 }
 
 function AADetail({ aa }: { aa: AutoAttendant }) {
+  const { t } = useI18n();
   const weekOrder = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
   const sorted = weekOrder.map((d) => aa.businessHours?.find((h) => h.day === d)).filter(Boolean) as typeof aa.businessHours;
 
@@ -408,26 +410,26 @@ function AADetail({ aa }: { aa: AutoAttendant }) {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {aa.defaultCallFlow && aa.defaultCallFlow !== "N/A" && (
           <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(96,165,250,0.05)", borderLeft: "3px solid rgba(96,165,250,0.5)", flex: 1, minWidth: 140 }}>
-            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.03em" }}>FLUX OUVRÉES</p>
+            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.03em" }}>{t("tabs.cartography.flowBusiness")}</p>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-1)" }}>{flowLabel(aa.defaultCallFlow)}</p>
           </div>
         )}
         {aa.afterHoursCallFlow && aa.afterHoursCallFlow !== "N/A" && (
           <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(245,158,11,0.05)", borderLeft: "3px solid rgba(245,158,11,0.5)", flex: 1, minWidth: 140 }}>
-            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#f59e0b", letterSpacing: "0.03em" }}>FLUX HORS OUVRÉES</p>
+            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#f59e0b", letterSpacing: "0.03em" }}>{t("tabs.cartography.flowAfterHours")}</p>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-1)" }}>{flowLabel(aa.afterHoursCallFlow)}</p>
           </div>
         )}
         {aa.timeZone && aa.timeZone !== "N/A" && (
           <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(148,163,184,0.05)", borderLeft: "3px solid rgba(148,163,184,0.35)", minWidth: 100 }}>
-            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.03em" }}>FUSEAU</p>
+            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.03em" }}>{t("tabs.cartography.timezoneLabel")}</p>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-1)" }}>{aa.timeZone}</p>
           </div>
         )}
       </div>
       {sorted && sorted.length > 0 && (
         <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(16,185,129,0.05)", borderLeft: "3px solid rgba(16,185,129,0.4)" }}>
-          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#10b981", letterSpacing: "0.03em" }}>HORAIRES</p>
+          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#10b981", letterSpacing: "0.03em" }}>{t("tabs.cartography.schedule")}</p>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             {sorted.map((dh) => {
               const closed = dh.hours === "Fermee" || dh.hours === "Fermée";
@@ -439,7 +441,7 @@ function AADetail({ aa }: { aa: AutoAttendant }) {
                   border: `1px solid ${closed ? "var(--border)" : "rgba(96,165,250,0.25)"}`,
                 }}>
                   <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.04em" }}>{dh.day.slice(0, 3).toUpperCase()}</span>
-                  <span style={{ fontSize: 10, color: closed ? "var(--text-3)" : "var(--text-1)", whiteSpace: "nowrap" }}>{closed ? "Fermé" : dh.hours}</span>
+                  <span style={{ fontSize: 10, color: closed ? "var(--text-3)" : "var(--text-1)", whiteSpace: "nowrap" }}>{closed ? t("tabs.cartography.closed") : dh.hours}</span>
                 </div>
               );
             })}
@@ -451,12 +453,13 @@ function AADetail({ aa }: { aa: AutoAttendant }) {
 }
 
 function CQDetail({ cq }: { cq: CallQueue }) {
+  const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {cq.routingMethod && (
           <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(148,163,184,0.05)", borderLeft: "3px solid rgba(148,163,184,0.35)", minWidth: 110 }}>
-            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.03em" }}>ROUTAGE</p>
+            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.03em" }}>{t("tabs.cartography.routing")}</p>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-1)" }}>{cq.routingMethod}</p>
           </div>
         )}
@@ -468,14 +471,14 @@ function CQDetail({ cq }: { cq: CallQueue }) {
         )}
         {cq.overflowAction && (
           <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(239,68,68,0.05)", borderLeft: "3px solid rgba(239,68,68,0.4)", minWidth: 110 }}>
-            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#ef4444", letterSpacing: "0.03em" }}>DÉBORDEMENT</p>
+            <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "#ef4444", letterSpacing: "0.03em" }}>{t("tabs.cartography.overflow")}</p>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-1)" }}>{cq.overflowAction}</p>
           </div>
         )}
       </div>
       {cq.agents && cq.agents.length > 0 && (
         <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(96,165,250,0.05)", borderLeft: "3px solid rgba(96,165,250,0.45)" }}>
-          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.03em" }}>AGENTS ({cq.agents.length})</p>
+          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.03em" }}>{t("tabs.cartography.agents")} ({cq.agents.length})</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {cq.agents.map((a, i) => (
               <span key={i} style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: "rgba(96,165,250,0.1)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.25)" }}>{a}</span>
@@ -485,7 +488,7 @@ function CQDetail({ cq }: { cq: CallQueue }) {
       )}
       {cq.distributionLists && cq.distributionLists.length > 0 && (
         <div style={{ padding: "7px 11px", borderRadius: 6, background: "rgba(167,139,250,0.05)", borderLeft: "3px solid rgba(167,139,250,0.45)" }}>
-          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.03em" }}>GROUPES ({cq.distributionLists.length})</p>
+          <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.03em" }}>{t("tabs.cartography.groups")} ({cq.distributionLists.length})</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {cq.distributionLists.map((dl, i) => (
               <span key={i} style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, background: "rgba(167,139,250,0.1)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.25)" }}>{dl}</span>
@@ -563,25 +566,23 @@ interface ListeViewProps {
 }
 
 function ListeView({ chains, freeChains, orphanAAs, orphanCQs }: ListeViewProps) {
+  const { t } = useI18n();
   const total = chains.length + freeChains.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Info */}
       <div style={{ background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "11px 14px" }}>
-        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-          Vue d'ensemble de la <strong>chaîne téléphonique</strong> : numéro → compte ressource → standard / file d'attente.
-          Cliquez sur une ligne pour voir le détail du routage.
-        </p>
+        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t("tabs.cartography.listInfo") }} />
       </div>
 
       {/* Legend */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Légende</span>
-        <span style={{ ...cardBase, background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.3)", color: "#10b981", fontSize: 11 }}><PhoneIcon />Numéro</span>
-        <span style={{ ...cardBase, background: "rgba(96,165,250,0.08)", borderColor: "rgba(96,165,250,0.3)", color: "#60a5fa", fontSize: 11 }}><UserIcon />Compte ressource</span>
-        <span style={{ ...cardBase, background: "rgba(167,139,250,0.08)", borderColor: "rgba(167,139,250,0.3)", color: "#a78bfa", fontSize: 11 }}><MenuIcon />Standard auto.</span>
-        <span style={{ ...cardBase, background: "rgba(251,191,36,0.08)", borderColor: "rgba(251,191,36,0.3)", color: "#f59e0b", fontSize: 11 }}><QueueIcon />File d'attente</span>
-        <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: "auto" }}>{total} chaîne{total > 1 ? "s" : ""}</span>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("tabs.cartography.legend")}</span>
+        <span style={{ ...cardBase, background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.3)", color: "#10b981", fontSize: 11 }}><PhoneIcon />{t("tabs.cartography.legendPhone")}</span>
+        <span style={{ ...cardBase, background: "rgba(96,165,250,0.08)", borderColor: "rgba(96,165,250,0.3)", color: "#60a5fa", fontSize: 11 }}><UserIcon />{t("tabs.cartography.legendRa")}</span>
+        <span style={{ ...cardBase, background: "rgba(167,139,250,0.08)", borderColor: "rgba(167,139,250,0.3)", color: "#a78bfa", fontSize: 11 }}><MenuIcon />{t("tabs.cartography.legendAa")}</span>
+        <span style={{ ...cardBase, background: "rgba(251,191,36,0.08)", borderColor: "rgba(251,191,36,0.3)", color: "#f59e0b", fontSize: 11 }}><QueueIcon />{t("tabs.cartography.legendCq")}</span>
+        <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: "auto" }}>{total} {total > 1 ? t("tabs.cartography.chainPlural") : t("tabs.cartography.chainSingular")}</span>
       </div>
 
       {/* Chains with RA */}
@@ -594,20 +595,20 @@ function ListeView({ chains, freeChains, orphanAAs, orphanCQs }: ListeViewProps)
       {/* Free numbers */}
       {freeChains.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <p style={{ margin: "2px 0 4px", fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>Numéros libres (non attribués)</p>
+          <p style={{ margin: "2px 0 4px", fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>{t("tabs.cartography.freeNumbers")}</p>
           {freeChains.map((chain, i) => <ChainRow key={`free-${chain.phoneNumber}-${i}`} chain={chain} />)}
         </div>
       )}
 
       {total === 0 && (
-        <p style={{ color: "var(--text-3)", fontSize: 13 }}>Aucune chaîne téléphonique détectée.</p>
+        <p style={{ color: "var(--text-3)", fontSize: 13 }}>{t("tabs.cartography.noChains")}</p>
       )}
 
       {/* Orphans */}
       <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 2 }}>
-        <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>Entités sans numéro direct détecté</p>
-        <OrphanSection title="Standards automatiques sans numéro direct" items={orphanAAs} color="#a78bfa" />
-        <OrphanSection title="Files d'attente sans numéro direct" items={orphanCQs} color="#f59e0b" />
+        <p style={{ margin: "0 0 2px", fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>{t("tabs.cartography.orphanTitle")}</p>
+        <OrphanSection title={t("tabs.cartography.orphanAAs")} items={orphanAAs} color="#a78bfa" />
+        <OrphanSection title={t("tabs.cartography.orphanCQs")} items={orphanCQs} color="#f59e0b" />
       </div>
     </div>
   );
@@ -641,6 +642,7 @@ function SubTabBtn({ active, onClick, children }: { active: boolean; onClick: ()
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CartographieTab({ data }: Props) {
+  const { t } = useI18n();
   const [subTab, setSubTab] = useState<"liste" | "graphe">("liste");
 
   const { chains, freeChains, orphanAAs, orphanCQs } = useMemo(
@@ -654,10 +656,10 @@ export default function CartographieTab({ data }: Props) {
       {/* Sub-tab header */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 18 }}>
         <SubTabBtn active={subTab === "liste"} onClick={() => setSubTab("liste")}>
-          Liste des chaînes
+          {t("tabs.cartography.listTab")}
         </SubTabBtn>
         <SubTabBtn active={subTab === "graphe"} onClick={() => setSubTab("graphe")}>
-          Graphe réseau
+          {t("tabs.cartography.graphTab")}
         </SubTabBtn>
       </div>
 

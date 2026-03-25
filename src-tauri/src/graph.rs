@@ -7,15 +7,15 @@ use std::sync::OnceLock;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-// Détection unique de l'exécutable PowerShell optimal.
-// PS7 (pwsh) est requis pour les DLL .NET 8+ du module MicrosoftTeams récent.
-// On teste dans l'ordre : "pwsh" via PATH, puis les chemins d'installation connus.
+// One-time detection of the optimal PowerShell executable.
+// PS7 (pwsh) is required for .NET 8+ DLLs used by the recent MicrosoftTeams module.
+// Tested in order: "pwsh" via PATH, then known installation paths.
 static PS_EXE: OnceLock<String> = OnceLock::new();
 
 fn ps_exe() -> &'static str {
     PS_EXE.get_or_init(|| {
-        // Chemins à tester dans l'ordre — le PATH peut ne pas être hérité si Tauri
-        // est lancé depuis un contexte qui n'a pas encore le PS7 PATH à jour.
+        // Paths to test in order — PATH may not be inherited if Tauri
+        // is launched from a context where the PS7 PATH is not yet updated.
         let candidates = [
             "pwsh",
             r"C:\Program Files\PowerShell\7\pwsh.exe",
@@ -34,7 +34,7 @@ fn ps_exe() -> &'static str {
     })
 }
 
-/// Retourne l'exécutable PowerShell choisi (pour diagnostics UI).
+/// Returns the selected PowerShell executable (for UI diagnostics).
 pub fn ps_exe_name() -> &'static str {
     ps_exe()
 }
@@ -46,15 +46,15 @@ pub fn friendly_sku(sku: &str) -> &str {
     match sku {
         // Teams Phone
         "MCOEV"                      => "Microsoft Teams Phone Standard",
-        "MCOEV_VIRTUALUSER"          => "Compte de ressources téléphoniques Microsoft Teams",
-        "PHONESYSTEM_VIRTUALUSER"    => "Compte de ressources téléphoniques Microsoft Teams",
-        "MCOPSTN1"                   => "Forfait d'appels nationaux Teams",
-        "MCOPSTN2"                   => "Forfait d'appels internationaux Teams",
-        "MCOPSTN_5"                  => "Forfait d'appels à la minute Teams",
-        "MCOPSTNC"                   => "Crédits de communication Teams",
+        "MCOEV_VIRTUALUSER"          => "Microsoft Teams Phone Resource Account",
+        "PHONESYSTEM_VIRTUALUSER"    => "Microsoft Teams Phone Resource Account",
+        "MCOPSTN1"                   => "Microsoft Teams Domestic Calling Plan",
+        "MCOPSTN2"                   => "Microsoft Teams International Calling Plan",
+        "MCOPSTN_5"                  => "Microsoft Teams Pay As You Go Calling Plan",
+        "MCOPSTNC"                   => "Microsoft Teams Communication Credits",
         "MCOCAP"                     => "Teams Shared Devices",
-        "MCOMEETADV"                 => "Microsoft 365 Audioconférence",
-        "MCOSTANDARD"                => "Skype Entreprise Online (plan 2)",
+        "MCOMEETADV"                 => "Microsoft 365 Audio Conferencing",
+        "MCOSTANDARD"                => "Skype for Business Online (Plan 2)",
         // Teams Rooms
         "MEETING_ROOM"               => "Microsoft Teams Rooms Standard",
         "MEETING_ROOM_PLUS"          => "Microsoft Teams Rooms Premium",
@@ -81,12 +81,12 @@ pub fn friendly_sku(sku: &str) -> &str {
         "STANDARDWOFFPACK"           => "Office 365 E2",
         // Power Platform
         "POWER_BI_PRO"               => "Power BI Pro",
-        "POWER_BI_PREMIUM_PER_USER"  => "Power BI Premium par utilisateur",
-        "POWER_BI_STANDARD"          => "Power BI (gratuit)",
+        "POWER_BI_PREMIUM_PER_USER"  => "Power BI Premium Per User",
+        "POWER_BI_STANDARD"          => "Power BI (free)",
         "FLOW_FREE"                  => "Microsoft Power Automate Free",
         "POWERAPPS_DEV"              => "Microsoft Power Apps for Developer",
-        "POWERAPPS_VIRAL"            => "Microsoft Power Apps Plan 2 (essai)",
-        "MICROSOFT_FABRIC_FREE"      => "Microsoft Fabric (gratuit)",
+        "POWERAPPS_VIRAL"            => "Microsoft Power Apps Plan 2 Trial",
+        "MICROSOFT_FABRIC_FREE"      => "Microsoft Fabric (free)",
         // Security / Identity
         "EMS"                        => "Enterprise Mobility + Security E3",
         "EMSPREMIUM"                 => "Enterprise Mobility + Security E5",
@@ -161,9 +161,9 @@ pub struct CallQueue {
     pub language: String,
     pub routing_method: String,
     pub agent_count: i64,
-    /// Noms d'affichage des agents individuels (enrichis depuis le répertoire Graph).
+    /// Display names of individual agents (enriched from the Graph directory).
     pub agents: Vec<String>,
-    /// IDs des listes/groupes de distribution.
+    /// IDs of distribution lists/groups.
     pub distribution_lists: Vec<String>,
     pub timeout_action: String,
     pub overflow_action: String,
@@ -187,17 +187,17 @@ pub struct AutoAttendant {
     pub phone_number: String,
     pub status: String,
     pub can_be_deleted: String,
-    /// Nombre de comptes ressources liés (depuis ApplicationInstances PS).
+    /// Number of linked resource accounts (from ApplicationInstances PS).
     pub resource_account_count: i64,
-    /// Nombre de comptes ressources liés et licenciés.
+    /// Number of linked and licensed resource accounts.
     pub resource_account_licensed_count: i64,
-    /// Résumé du flux d'appels par défaut (heures ouvrées).
+    /// Summary of the default call flow (business hours).
     pub default_call_flow: String,
-    /// Résumé du flux d'appels hors heures ouvrées.
+    /// Summary of the after-hours call flow.
     pub after_hours_call_flow: String,
-    /// Horaires d'ouverture hebdomadaires (lun–dim).
+    /// Weekly business hours (Mon–Sun).
     pub business_hours: Vec<DayHours>,
-    /// ObjectIds / UPNs des comptes ressources liés — usage interne, non sérialisé vers le frontend.
+    /// ObjectIds / UPNs of linked resource accounts — internal use only, not serialized to the frontend.
     #[serde(skip_serializing)]
     pub application_instances: Vec<String>,
 }
@@ -266,7 +266,7 @@ async fn fetch_pages(client: &Client, token: &str, url: &str) -> Result<Vec<Valu
         if !resp.status().is_success() {
             let st = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("HTTP {st} depuis {u}: {body}"));
+            return Err(format!("HTTP {st} from {u}: {body}"));
         }
 
         let json: Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -335,13 +335,13 @@ fn is_free_subscription_sku(sku: &str) -> bool {
 
 fn compute_subscription_status(available: i64, consumed: i64, purchased: i64, is_free: bool) -> String {
     if available < 0 {
-        // Dépassement réel (plus consommé que payé)
+        // Real overage (more consumed than purchased)
         "DEPASSEMENT".into()
     } else if is_free || purchased >= 10_000 {
-        // Licence gratuite ou quasi-illimitée (bundle lié à d'autres offres)
+        // Free or near-unlimited license (bundle tied to other offers)
         "OK".into()
     } else if consumed == 0 {
-        // Aucune attribution — pas un surplus, juste capacité non utilisée
+        // No assignments — not a surplus, just unused capacity
         "OK".into()
     } else if available <= 1 {
         "OK".into()
@@ -417,15 +417,15 @@ fn merge_resource_based_attendants(data: &mut DashboardData) {
             default_call_flow: String::new(),
             after_hours_call_flow: String::new(),
             business_hours: Vec::new(),
-            // UPN de ce compte ressource — utilisé par compute_resource_account_counts
+            // UPN of this resource account — used by compute_resource_account_counts
             application_instances: vec![ra.upn.clone()],
         })
         .collect();
     data.auto_attendants.extend(new_aas);
 }
 
-/// Complète les numéros de téléphone manquants pour les CQ/AA
-/// en croisant avec les comptes ressources déjà récupérés via Graph.
+/// Fills in missing phone numbers for CQs/AAs
+/// by cross-referencing resource accounts already fetched via Graph.
 fn enrich_from_resource_accounts(data: &mut DashboardData) {
     let cq_phones: std::collections::HashMap<String, String> = data
         .resource_accounts
@@ -458,9 +458,9 @@ fn enrich_from_resource_accounts(data: &mut DashboardData) {
     }
 }
 
-/// Calcule le champ can_be_deleted pour toutes les files d'attente et standards automatiques.
-/// File d'attente : supprimable si aucun agent ET aucun numéro attribué.
-/// Standard automatique : supprimable si aucun numéro attribué ET aucun compte ressource lié.
+/// Computes the can_be_deleted field for all call queues and auto attendants.
+/// Call queue: deletable if no agents AND no assigned number.
+/// Auto attendant: deletable if no assigned number AND no linked resource account.
 fn compute_deletability(data: &mut DashboardData) {
     for cq in data.call_queues.iter_mut() {
         let no_phone = cq.phone_number.is_empty() || cq.phone_number == "-";
@@ -470,7 +470,7 @@ fn compute_deletability(data: &mut DashboardData) {
             "Non".into()
         };
     }
-    // Noms des comptes ressources de type "Auto Attendant" (en minuscules pour comparaison)
+    // Names of "Auto Attendant" resource accounts (lowercased for comparison)
     let ra_aa_names: std::collections::HashSet<String> = data
         .resource_accounts
         .iter()
@@ -489,22 +489,22 @@ fn compute_deletability(data: &mut DashboardData) {
     }
 }
 
-// Script PowerShell de vérification/installation du module MicrosoftTeams.
-// Sur PS5 : avertit que PS7 est requis.
-// Sur PS7 : importe le module (direct path si nécessaire), installe uniquement si absent.
-// Évite Install-Module -Force si le module est déjà présent (prévient les conflits OneDrive).
+// PowerShell script for checking/installing the MicrosoftTeams module.
+// On PS5: warns that PS7 is required.
+// On PS7: imports the module (direct path if needed), installs only if absent.
+// Avoids Install-Module -Force if the module is already present (prevents OneDrive conflicts).
 const PS_CHECK_SCRIPT: &str = r#"
 $ProgressPreference = 'SilentlyContinue'
 $WarningPreference  = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Teams PS module (v5+) embarque des DLL .NET 8 incompatibles avec PS 5.1 (.NET Framework 4.x).
+# Teams PS module (v5+) ships .NET 8 DLLs incompatible with PS 5.1 (.NET Framework 4.x).
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-    'ps5: PowerShell 7 (pwsh) est requis pour le module MicrosoftTeams. Installez-le depuis https://aka.ms/powershell'
+    'ps5: PowerShell 7 (pwsh) is required for the MicrosoftTeams module. Install it from https://aka.ms/powershell'
     exit
 }
 
-# Essai d'import standard
+# Standard import attempt
 $importOk = $false
 try {
     Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
@@ -513,8 +513,8 @@ try {
 
 if ($importOk) { 'ok'; exit }
 
-# Import échoué : chercher le module déjà installé et tenter un import par chemin direct
-# (évite de forcer une réinstallation si les fichiers sont verrouillés par OneDrive)
+# Import failed: look for an already-installed module and attempt a direct-path import
+# (avoids forcing reinstall if files are locked by OneDrive)
 $existing = Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue |
             Sort-Object Version -Descending | Select-Object -First 1
 if ($existing) {
@@ -525,7 +525,7 @@ if ($existing) {
     } catch { }
 }
 
-# Module absent : installation depuis PSGallery
+# Module not found: install from PSGallery
 try {
     $nuget = Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue
     if (-not $nuget -or [version]$nuget.Version -lt [version]'2.8.5.201') {
@@ -538,21 +538,21 @@ try {
 } catch {
     $errMsg = [string]$_.Exception.Message
     if ($errMsg -match 'denied|OneDrive|Access to the path') {
-        'error: Accès refusé (OneDrive verrouille les fichiers du module). Installez manuellement : Install-Module MicrosoftTeams -Scope AllUsers'
+        'error: Access denied (OneDrive is locking module files). Install manually: Install-Module MicrosoftTeams -Scope AllUsers'
     } else {
         'error: ' + $errMsg
     }
 }
 "#;
 
-/// Exécute le script de vérification/installation du module MicrosoftTeams.
-/// Retourne "ok" si le module est déjà fonctionnel, "installed" après installation réussie,
-/// ou une erreur en cas d'échec.
-/// Fonction bloquante — à appeler via spawn_blocking ou std::thread::spawn.
+/// Runs the MicrosoftTeams module check/install script.
+/// Returns "ok" if the module is already working, "installed" after a successful install,
+/// or an error on failure.
+/// Blocking function — call via spawn_blocking or std::thread::spawn.
 pub fn run_ps_module_install() -> Result<String, String> {
     let temp_path = std::env::temp_dir().join("teams_check_module.ps1");
     std::fs::write(&temp_path, PS_CHECK_SCRIPT.as_bytes())
-        .map_err(|e| format!("Impossible d'écrire le script de vérification : {e}"))?;
+        .map_err(|e| format!("Failed to write check script: {e}"))?;
     let script_path = temp_path.to_string_lossy().to_string();
 
     let mut cmd = Command::new(ps_exe());
@@ -570,7 +570,7 @@ pub fn run_ps_module_install() -> Result<String, String> {
 
     let output = cmd.output().map_err(|e| {
         let _ = std::fs::remove_file(&temp_path);
-        format!("Lancement PowerShell impossible : {e}")
+        format!("Failed to launch PowerShell: {e}")
     })?;
     let _ = std::fs::remove_file(&temp_path);
 
@@ -590,31 +590,31 @@ pub fn run_ps_module_install() -> Result<String, String> {
     }
 }
 
-/// Version pour le thread de démarrage : loggue le résultat sans retourner de valeur.
+/// Startup-thread version: logs the result without returning a value.
 pub fn check_ps_module() {
-    crate::logger::info(&format!("Exécutable PowerShell détecté : {}", ps_exe()));
+    crate::logger::info(&format!("PowerShell executable detected: {}", ps_exe()));
     match run_ps_module_install() {
-        Ok(s) if s == "installed" => crate::logger::info("Module PowerShell MicrosoftTeams installé avec succès."),
-        Ok(_)  => crate::logger::info("Module PowerShell MicrosoftTeams : OK."),
+        Ok(s) if s == "installed" => crate::logger::info("PowerShell MicrosoftTeams module installed successfully."),
+        Ok(_)  => crate::logger::info("PowerShell MicrosoftTeams module: OK."),
         Err(e) => crate::logger::warn(&format!("check_ps_module : {e}")),
     }
 }
 
-// Script PowerShell embarqué — utilise le module MicrosoftTeams.
-// Méthode d'authentification préférée : client_credentials (app-only) avec TEAMS_CLIENT_SECRET.
-// Fallback : tokens délégués passés par TEAMS_TOKEN/TEAMS_TOKEN2 (moins fiable sur module 7.x).
-// Exécuté de façon invisible (CREATE_NO_WINDOW + -WindowStyle Hidden).
+// Embedded PowerShell script — uses the MicrosoftTeams module.
+// Preferred authentication: client_credentials (app-only) with TEAMS_CLIENT_SECRET.
+// Fallback: delegated tokens passed via TEAMS_TOKEN/TEAMS_TOKEN2 (less reliable on module 7.x).
+// Runs invisibly (CREATE_NO_WINDOW + -WindowStyle Hidden).
 const PS_SCRIPT: &str = r#"
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Info de version pour diagnostics — visible dans les warnings de l'UI
+# Version info for diagnostics — visible in UI warnings
 $psVer = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
 
 try {
-    # Import standard, avec fallback par chemin direct (cas OneDrive/PSModulePath non configuré)
+    # Standard import, with direct-path fallback (OneDrive/PSModulePath not configured)
     $importOk = $false
     try {
         Import-Module MicrosoftTeams -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
@@ -626,11 +626,11 @@ try {
         if ($m) {
             Import-Module (Join-Path $m.ModuleBase 'MicrosoftTeams.psd1') -Force -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
         } else {
-            throw "Module MicrosoftTeams introuvable. Utilisez l'onglet CQ/AA pour l'installer."
+            throw "MicrosoftTeams module not found. Use the CQ/AA tab to install it."
         }
     }
 
-    # Version du module pour diagnostic (incluse dans le JSON de sortie)
+    # Module version for diagnostics (included in output JSON)
     $teamsModVer = (Get-Module MicrosoftTeams -ErrorAction SilentlyContinue).Version
     if (-not $teamsModVer) {
         $teamsModVer = (Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue |
@@ -643,8 +643,8 @@ try {
     $useAppAuth   = $clientSecret -and $clientSecret -ne '' -and $appId -and $appId -ne ''
 
     if ($useAppAuth) {
-        # Authentification application (client_credentials) — méthode recommandée par Microsoft
-        # pour Connect-MicrosoftTeams dans un contexte non-interactif (module 5.x+).
+        # Application authentication (client_credentials) — recommended by Microsoft
+        # for Connect-MicrosoftTeams in a non-interactive context (module 5.x+).
         # Ref: https://learn.microsoft.com/microsoftteams/teams-powershell-application-authentication
         $uri = "https://login.microsoftonline.com/$($env:TEAMS_TENANT)/oauth2/v2.0/token"
 
@@ -665,8 +665,8 @@ try {
         Connect-MicrosoftTeams -AccessTokens @($graphToken, $teamsToken) `
             -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
     } else {
-        # Fallback : tokens délégués (moins fiable sur module 7.x — "Not supported tenant type")
-        # Configurez un Client Secret dans Azure et dans les paramètres de l'app pour résoudre ce problème.
+        # Fallback: delegated tokens (less reliable on module 7.x — "Not supported tenant type")
+        # Configure a Client Secret in Azure and in app settings to resolve this.
         $graphToken  = $env:TEAMS_TOKEN
         $teamsToken  = $env:TEAMS_TOKEN2
         $hasTeams    = $teamsToken -and $teamsToken -ne ''
@@ -692,7 +692,7 @@ try {
             }
         }
         if (-not $connectOk) {
-            throw "Connexion Teams PS échouée (module $teamsModVerStr). Pour résoudre, ajoutez un Client Secret Azure dans les paramètres de l'application (onglet Configuration). Erreur : $connectErr"
+            throw "Teams PS connection failed (module $teamsModVerStr). To resolve, add an Azure Client Secret in the application settings. Error: $connectErr"
         }
     }
 
@@ -726,7 +726,7 @@ try {
         $rawAas = Get-CsAutoAttendant -ErrorAction Stop -WarningAction SilentlyContinue 3>$null
         if ($rawAas) {
             $aas = @($rawAas | ForEach-Object {
-                # --- Flux d'appels par defaut (heures ouvrees) ---
+                # --- Default call flow (business hours) ---
                 $dfFlow = 'N/A'
                 try {
                     $menu = $_.DefaultCallFlow.Menu
@@ -749,7 +749,7 @@ try {
                     }
                 } catch { $dfFlow = 'N/A' }
 
-                # --- Flux hors heures ouvrees ---
+                # --- After-hours call flow ---
                 $ahFlow = 'N/A'
                 try {
                     $aha = $_.CallHandlingAssociations |
@@ -781,10 +781,10 @@ try {
 
                 $appInst = @($_.ApplicationInstances | ForEach-Object { [string]$_ })
 
-                # --- Horaires d'ouverture hebdomadaires ---
+                # --- Weekly business hours ---
                 $bhList = @()
                 try {
-                    # Méthode 1 : retrouver le planning via l'association BusinessHours
+                    # Method 1: find the schedule via the BusinessHours association
                     $bhSched = $null
                     $bhAssoc = $_.CallHandlingAssociations |
                                Where-Object { [string]$_.Type -eq 'BusinessHours' } |
@@ -794,7 +794,7 @@ try {
                                    Where-Object { [string]$_.Id -eq [string]$bhAssoc.ScheduleId } |
                                    Select-Object -First 1
                     }
-                    # Méthode 2 : fallback — premier schedule avec WeeklyRecurrentSchedule
+                    # Method 2: fallback — first schedule with WeeklyRecurrentSchedule
                     if (-not $bhSched) {
                         foreach ($sc in $_.Schedules) {
                             if ($sc.WeeklyRecurrentSchedule) { $bhSched = $sc; break }
@@ -803,7 +803,7 @@ try {
                     if ($bhSched -and $bhSched.WeeklyRecurrentSchedule) {
                         $wrs    = $bhSched.WeeklyRecurrentSchedule
                         $days   = @('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')
-                        $daysFr = @('Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi')
+                        $daysEn = @('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')
                         for ($di = 0; $di -lt 7; $di++) {
                             $dayProp = $days[$di] + 'Hours'
                             $ranges  = $wrs.$dayProp
@@ -813,9 +813,9 @@ try {
                                     $e = '{0:D2}:{1:D2}' -f $_.End.Hours, $_.End.Minutes
                                     "$s - $e"
                                 })
-                                $bhList += @{ day = $daysFr[$di]; hours = ($rangeStrs -join ' / ') }
+                                $bhList += @{ day = $daysEn[$di]; hours = ($rangeStrs -join ' / ') }
                             } else {
-                                $bhList += @{ day = $daysFr[$di]; hours = 'Fermee' }
+                                $bhList += @{ day = $daysEn[$di]; hours = 'Closed' }
                             }
                         }
                     }
@@ -836,7 +836,7 @@ try {
         }
     } catch { $aaError = [string]$_.Exception.Message }
 
-    # Sérialisation manuelle pour éviter le problème PS5 avec les tableaux à 1 élément
+    # Manual serialization to avoid the PS5 issue with single-element arrays
     $cqsJson = if ($cqs.Count -eq 0) { '[]' }
                elseif ($cqs.Count -eq 1) { '[' + ($cqs[0] | ConvertTo-Json -Compress -Depth 5) + ']' }
                else { ConvertTo-Json -InputObject $cqs -Depth 5 -Compress }
@@ -859,18 +859,18 @@ try {
 }
 "#;
 
-/// Exécute le module PowerShell MicrosoftTeams en tâche de fond (sans fenêtre)
-/// pour récupérer les files d'attente et standards automatiques.
-/// graph_token   : token Graph (requis, fallback si pas de client_secret)
-/// tenant_id     : ID du tenant Azure AD
-/// client_id     : ID de l'app Azure AD (pour client_credentials)
-/// teams_token   : token service Teams 48ac35b8-... (fallback délégué)
-/// client_secret : secret client Azure (active l'auth app-only recommandée)
-/// Retourne (call_queues, auto_attendants, diagnostics) — les diagnostics sont des warnings.
+/// Runs the PowerShell MicrosoftTeams module in the background (no window)
+/// to retrieve call queues and auto attendants.
+/// graph_token   : Graph token (required, fallback if no client_secret)
+/// tenant_id     : Azure AD tenant ID
+/// client_id     : Azure AD app ID (for client_credentials)
+/// teams_token   : Teams service token 48ac35b8-... (delegated fallback)
+/// client_secret : Azure client secret (enables the recommended app-only auth)
+/// Returns (call_queues, auto_attendants, diagnostics) — diagnostics are warnings.
 fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str, teams_token: Option<&str>, client_secret: Option<&str>) -> Result<(Vec<CallQueue>, Vec<AutoAttendant>, Vec<String>), String> {
     let temp_path = std::env::temp_dir().join("teams_analysis_fetch.ps1");
     std::fs::write(&temp_path, PS_SCRIPT.as_bytes())
-        .map_err(|e| format!("Impossible d'écrire le script temporaire : {e}"))?;
+        .map_err(|e| format!("Failed to write temporary script: {e}"))?;
     let script_path = temp_path.to_string_lossy().to_string();
 
     let mut cmd = Command::new(ps_exe());
@@ -893,30 +893,30 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
 
-    crate::logger::info(&format!("PS fetch : lancement via {}", ps_exe()));
+    crate::logger::info(&format!("PS fetch: starting via {}", ps_exe()));
 
     let output = cmd.output().map_err(|e| {
         let _ = std::fs::remove_file(&temp_path);
-        format!("Lancement PowerShell impossible : {e}")
+        format!("Failed to launch PowerShell: {e}")
     })?;
     let _ = std::fs::remove_file(&temp_path);
 
-    crate::logger::info(&format!("PS fetch : exit={} stdout_len={} stderr_len={}",
+    crate::logger::info(&format!("PS fetch: exit={} stdout_len={} stderr_len={}",
         output.status, output.stdout.len(), output.stderr.len()));
 
     let raw = String::from_utf8_lossy(&output.stdout).to_string();
 
-    // Log les 500 premiers caractères de stdout pour diagnostic
+    // Log the first 500 characters of stdout for diagnostics
     let preview = raw.chars().take(500).collect::<String>().replace('\n', "↵");
-    crate::logger::info(&format!("PS fetch stdout (500c) : {preview}"));
+    crate::logger::info(&format!("PS fetch stdout (500c): {preview}"));
 
     let stderr_raw = String::from_utf8_lossy(&output.stderr).to_string();
     if !stderr_raw.trim().is_empty() {
         let err_preview = stderr_raw.chars().take(300).collect::<String>().replace('\n', "↵");
-        crate::logger::warn(&format!("PS fetch stderr : {err_preview}"));
+        crate::logger::warn(&format!("PS fetch stderr: {err_preview}"));
     }
 
-    // On prend la dernière ligne qui ressemble à du JSON
+    // Take the last line that looks like JSON
     let json_str = raw
         .lines()
         .rev()
@@ -924,16 +924,16 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
         .ok_or_else(|| {
             let hint = stderr_raw.lines().last().unwrap_or("").trim().to_string();
             let err = if hint.is_empty() {
-                "Aucun JSON retourné par PowerShell (module MicrosoftTeams non installé ?)".to_string()
+                "No JSON returned by PowerShell (MicrosoftTeams module not installed?)".to_string()
             } else {
-                format!("Aucun JSON retourné par PowerShell : {hint}")
+                format!("No JSON returned by PowerShell: {hint}")
             };
             crate::logger::warn(&format!("PS fetch : {err}"));
             err
         })?;
 
     let json: Value = serde_json::from_str(json_str.trim())
-        .map_err(|e| format!("JSON PowerShell invalide : {e}"))?;
+        .map_err(|e| format!("Invalid PowerShell JSON: {e}"))?;
 
     let ps_ver = str_val(&json, "psVer");
     let mod_ver = str_val(&json, "modVer");
@@ -942,24 +942,24 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
     if !json.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
         let err = str_val(&json, "error");
         let full = format!("{err} [PS {ps_ver} via {ps_exe_used}, module {mod_ver}]");
-        crate::logger::warn(&format!("PS fetch error : {full}"));
+        crate::logger::warn(&format!("PS fetch error: {full}"));
         return Err(full);
     }
 
     let mut diagnostics = Vec::new();
-    // Toujours afficher quelle version PS a exécuté le script
+    // Always show which PS version executed the script
     if !ps_ver.is_empty() {
         diagnostics.push(format!("PowerShell {ps_ver} ({ps_exe_used})"));
     }
     let cq_err = str_val(&json, "cqError");
     let aa_err = str_val(&json, "aaError");
     if !cq_err.is_empty() {
-        crate::logger::warn(&format!("PS Get-CsCallQueue error : {cq_err}"));
-        diagnostics.push(format!("Get-CsCallQueue : {cq_err}"));
+        crate::logger::warn(&format!("PS Get-CsCallQueue error: {cq_err}"));
+        diagnostics.push(format!("Get-CsCallQueue: {cq_err}"));
     }
     if !aa_err.is_empty() {
-        crate::logger::warn(&format!("PS Get-CsAutoAttendant error : {aa_err}"));
-        diagnostics.push(format!("Get-CsAutoAttendant : {aa_err}"));
+        crate::logger::warn(&format!("PS Get-CsAutoAttendant error: {aa_err}"));
+        diagnostics.push(format!("Get-CsAutoAttendant: {aa_err}"));
     }
 
     let mut cqs = Vec::new();
@@ -1010,7 +1010,7 @@ fn run_powershell_for_teams(graph_token: &str, tenant_id: &str, client_id: &str,
                 phone_number:                    str_val(a, "phoneNumber"),
                 status:                          str_val(a, "status"),
                 can_be_deleted:                  String::new(),
-                resource_account_count:          0, // calculé dans compute_resource_account_counts
+                resource_account_count:          0, // computed in compute_resource_account_counts
                 resource_account_licensed_count: 0,
                 default_call_flow:               str_val(a, "defaultCallFlow"),
                 after_hours_call_flow:           str_val(a, "afterHoursCallFlow"),
@@ -1037,7 +1037,7 @@ try {
     if (-not $importOk) {
         $m = Get-Module -ListAvailable -Name MicrosoftTeams -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1
         if ($m) { Import-Module (Join-Path $m.ModuleBase 'MicrosoftTeams.psd1') -Force -ErrorAction Stop -WarningAction SilentlyContinue 3>$null }
-        else { throw "Module MicrosoftTeams introuvable. Installez-le depuis l'onglet Files d'attente." }
+        else { throw "MicrosoftTeams module not found. Install it from the Call Queues tab." }
     }
 
     $clientSecret = $env:TEAMS_CLIENT_SECRET
@@ -1076,7 +1076,7 @@ try {
         Remove-CsPhoneNumberAssignment -Identity $upn -RemoveAll -ErrorAction Stop
         Grant-CsOnlineVoiceRoutingPolicy -Identity $upn -PolicyName $null -ErrorAction Stop
     } else {
-        throw "Action inconnue : $action"
+        throw "Unknown action: $action"
     }
 
     Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue | Out-Null
@@ -1101,7 +1101,7 @@ pub fn run_ps_phone_action(
 ) -> Result<(), String> {
     let temp_path = std::env::temp_dir().join("teams_phone_action.ps1");
     std::fs::write(&temp_path, PS_PHONE_SCRIPT.as_bytes())
-        .map_err(|e| format!("Impossible d'écrire le script PS : {e}"))?;
+        .map_err(|e| format!("Failed to write PS script: {e}"))?;
     let script_path = temp_path.to_string_lossy().to_string();
 
     let mut cmd = std::process::Command::new(ps_exe());
@@ -1126,14 +1126,14 @@ pub fn run_ps_phone_action(
 
     let out = cmd.output().map_err(|e| {
         let _ = std::fs::remove_file(&temp_path);
-        format!("Impossible de lancer PowerShell : {e}")
+        format!("Failed to launch PowerShell: {e}")
     })?;
     let _ = std::fs::remove_file(&temp_path);
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let trimmed = stdout.trim();
 
-    // Trouver la dernière ligne JSON
+    // Find the last JSON line
     let json_line = trimmed.lines()
         .filter(|l| l.starts_with('{'))
         .last()
@@ -1142,7 +1142,7 @@ pub fn run_ps_phone_action(
     let v: serde_json::Value = serde_json::from_str(json_line)
         .map_err(|_| {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            format!("Réponse PS inattendue : {trimmed}\n{stderr}")
+            format!("Unexpected PS response: {trimmed}\n{stderr}")
         })?;
 
     if v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false) {
@@ -1150,14 +1150,14 @@ pub fn run_ps_phone_action(
     } else {
         let err = v.get("error")
             .and_then(|x| x.as_str())
-            .unwrap_or("Erreur inconnue")
+            .unwrap_or("Unknown error")
             .to_string();
         Err(err)
     }
 }
 
-/// Remplace les ObjectIds d'agents (GUID AAD) par les noms d'affichage correspondants.
-/// Les IDs non résolus sont conservés sous forme abrégée (8 premiers caractères + "…").
+/// Replaces agent ObjectIds (AAD GUIDs) with their corresponding display names.
+/// Unresolved IDs are kept in abbreviated form (first 8 characters + "…").
 fn enrich_agents(
     call_queues: &mut [CallQueue],
     user_id_to_name: &std::collections::HashMap<String, String>,
@@ -1183,7 +1183,7 @@ fn enrich_distribution_lists(
             group_id_to_name.get(id)
                 .cloned()
                 .unwrap_or_else(|| {
-                    // Si pas résolu, tronquer le GUID pour l'affichage
+                    // If unresolved, truncate the GUID for display
                     let s: String = id.chars().take(8).collect();
                     if id.len() > 8 { format!("{s}…") } else { s }
                 })
@@ -1191,13 +1191,13 @@ fn enrich_distribution_lists(
     }
 }
 
-/// Calcule resource_account_count et resource_account_licensed_count pour chaque AutoAttendant.
-/// Utilise application_instances (UPN ou ObjectId) en croisant avec les comptes ressources connus.
+/// Computes resource_account_count and resource_account_licensed_count for each AutoAttendant.
+/// Uses application_instances (UPN or ObjectId) cross-referenced against known resource accounts.
 fn compute_resource_account_counts(
     data: &mut DashboardData,
     user_id_to_upn: &std::collections::HashMap<String, String>,
 ) {
-    // Map UPN (minuscules) → est_licencié pour les comptes ressources
+    // Map UPN (lowercase) → is_licensed for resource accounts
     let ra_by_upn: std::collections::HashMap<String, bool> = data.resource_accounts.iter()
         .map(|r| (lower(&r.upn), r.licensed == "Oui"))
         .collect();
@@ -1211,11 +1211,11 @@ fn compute_resource_account_counts(
         for inst in &aa.application_instances {
             count += 1;
             let inst_lower = lower(inst);
-            // Essayer comme UPN direct
+            // Try as a direct UPN
             let is_licensed = if let Some(&l) = ra_by_upn.get(&inst_lower) {
                 Some(l)
             } else {
-                // Essayer comme ObjectId → chercher l'UPN correspondant
+                // Try as an ObjectId → look up the corresponding UPN
                 user_id_to_upn.get(inst).and_then(|upn| ra_by_upn.get(&lower(upn))).copied()
             };
             if let Some(true) = is_licensed {
@@ -1231,13 +1231,13 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
     let mut data = DashboardData::default();
     let mut sku_id_map: std::collections::HashMap<String, String> = Default::default();
     let mut assigned_numbers_by_target: std::collections::HashMap<String, Vec<String>> = Default::default();
-    // Maps construites pendant la collecte des utilisateurs pour l'enrichissement des CQ/AA
+    // Maps built during user collection for CQ/AA enrichment
     let mut user_id_to_name:  std::collections::HashMap<String, String> = Default::default();
     let mut user_id_to_upn:   std::collections::HashMap<String, String> = Default::default();
     let mut group_id_to_name: std::collections::HashMap<String, String> = Default::default();
 
     match fetch_pages(client, token, &format!("{V1}/subscribedSkus")).await {
-        Err(e) => data.errors.push(format!("Abonnements : {e}")),
+        Err(e) => data.errors.push(format!("Subscriptions: {e}")),
         Ok(skus) => {
             for s in &skus {
                 let id = str_val(s, "skuId");
@@ -1269,7 +1269,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
 
     match fetch_pages(client, token, &format!("{BETA}/admin/teams/telephoneNumberManagement/numberAssignments?$top=999")).await {
         Err(e) => {
-            data.warnings.push(format!("Inventaire des numéros Teams indisponible via l'API numberAssignments ({e}). Repli partiel sur les données utilisateur."));
+            data.warnings.push(format!("Teams number inventory unavailable via numberAssignments API ({e}). Partial fallback to user data."));
         }
         Ok(assignments) => {
             for n in assignments {
@@ -1302,14 +1302,14 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
 
     let user_url = format!("{V1}/users?$select=id,displayName,userPrincipalName,businessPhones,assignedLicenses,accountEnabled,usageLocation,userType&$top=999");
     match fetch_pages(client, token, &user_url).await {
-        Err(e) => data.errors.push(format!("Utilisateurs : {e}")),
+        Err(e) => data.errors.push(format!("Users: {e}")),
         Ok(users) => {
             for u in &users {
                 let user_id = str_val(u, "id");
                 let upn = str_val(u, "userPrincipalName");
                 let name = str_val(u, "displayName");
                 let enabled = bool_val(u, "accountEnabled");
-                // Alimenter les maps pour l'enrichissement CQ/AA
+                // Feed the maps for CQ/AA enrichment
                 if !user_id.is_empty() {
                     user_id_to_name.insert(user_id.clone(), name.clone());
                     user_id_to_upn.insert(user_id.clone(), upn.clone());
@@ -1336,7 +1336,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 let phone_license_names = lic_skus.iter().filter(|s| is_phone_related_sku(s)).map(|s| friendly_sku(s).to_string()).collect::<Vec<_>>();
                 let phone_number_display = if phones.is_empty() { "-".into() } else { dedup_keep_order(phones.clone()).join(", ") };
 
-                // userType : "Guest" = externe, "Member" (ou absent) = interne
+                // userType: "Guest" = external, "Member" (or absent) = internal
                 let raw_user_type = str_val(u, "userType");
                 let user_type_display: String = if raw_user_type.eq_ignore_ascii_case("Guest") {
                     "Externe".into()
@@ -1406,14 +1406,14 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                         upn: upn.clone(),
                         display_name: name.clone(),
                         licenses: phone_lics.iter().map(|s| friendly_sku(s).to_string()).collect::<Vec<_>>().join(", "),
-                        status: "Licence Teams Phone sans numéro Teams affecté".into(),
+                        status: "Teams Phone license without assigned Teams number".into(),
                     });
                 }
             }
         }
     }
 
-    // Résolution des groupes (listes de distribution) : GUID → displayName
+    // Group resolution (distribution lists): GUID → displayName
     match fetch_pages(client, token, &format!("{V1}/groups?$select=id,displayName&$top=999")).await {
         Ok(groups) => {
             for g in &groups {
@@ -1425,13 +1425,13 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 }
             }
         }
-        Err(_) => {} // non bloquant
+        Err(_) => {} // non-blocking
     }
 
-    // Récupération des files d'attente et standards automatiques via PowerShell MicrosoftTeams.
-    // Méthode préférée : client_credentials (TEAMS_CLIENT_SECRET configuré).
-    // Fallback : tokens délégués (TEAMS_TOKEN / TEAMS_TOKEN2).
-    // L'exécution est invisible (pas de fenêtre PowerShell).
+    // Fetch call queues and auto attendants via the PowerShell MicrosoftTeams module.
+    // Preferred method: client_credentials (TEAMS_CLIENT_SECRET configured).
+    // Fallback: delegated tokens (TEAMS_TOKEN / TEAMS_TOKEN2).
+    // Runs invisibly (no PowerShell window).
     {
         let tok       = token.to_string();
         let tid       = tenant_id.to_string();
@@ -1452,21 +1452,21 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
             }
             Ok(Err(e)) => {
                 data.warnings.push(format!(
-                    "Module PowerShell MicrosoftTeams indisponible ({e}). Affichage à partir des comptes ressources détectés."
+                    "PowerShell MicrosoftTeams module unavailable ({e}). Displaying from detected resource accounts."
                 ));
             }
             Err(e) => {
-                data.warnings.push(format!("Erreur tâche PowerShell : {e}"));
+                data.warnings.push(format!("PowerShell task error: {e}"));
             }
         }
 
         #[cfg(not(windows))]
         {
-            // Sur macOS/Linux, PowerShell n'est pas disponible en standard.
-            // Les onglets CQ/AA seront alimentés depuis les comptes ressources (fallback).
-            let _ = (tok, tid, app_id, teams_tok, client_sec); // éviter les warnings de compilation
+            // On macOS/Linux, PowerShell is not available by default.
+            // CQ/AA tabs will be populated from resource accounts (fallback).
+            let _ = (tok, tid, app_id, teams_tok, client_sec); // suppress unused variable warnings
             data.warnings.push(
-                "Module PowerShell MicrosoftTeams indisponible (Windows requis). Affichage à partir des comptes ressources détectés.".into()
+                "PowerShell MicrosoftTeams module unavailable (Windows required). Displaying from detected resource accounts.".into()
             );
         }
     }

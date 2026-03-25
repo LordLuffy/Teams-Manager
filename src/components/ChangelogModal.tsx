@@ -22,7 +22,7 @@ export default function ChangelogModal({ appVersion, onClose }: Props) {
   const [expandedTag, setExpandedTag] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("https://api.github.com/repos/LordLuffy/Teams-Manager/releases?per_page=20")
+    fetch("https://api.github.com/repos/Xenovyrion/Teams-Manager/releases?per_page=20")
       .then(res => res.ok ? res.json() : Promise.reject(res.status))
       .then((data: Release[]) => {
         setReleases(data);
@@ -46,7 +46,6 @@ export default function ChangelogModal({ appVersion, onClose }: Props) {
         <div style={{ padding: "18px 24px 15px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{t("changelog.title")}</h3>
-            <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>{t("changelog.subtitle")}</p>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 18, padding: "2px 4px", lineHeight: 1, borderRadius: 4 }}>✕</button>
         </div>
@@ -127,7 +126,7 @@ export default function ChangelogModal({ appVersion, onClose }: Props) {
                   {release.published_at && (
                     <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>
                       {new Date(release.published_at).toLocaleDateString(
-                        { en: "en-EN", fr: "fr-FR", es: "es-ES", de: "de-DE" }[lang] ?? "en-GB",
+                        ({ en: "en-GB", fr: "fr-FR", es: "es-ES", de: "de-DE" } as Record<string, string>)[lang] ?? "en-GB",
                         { day: "2-digit", month: "short", year: "numeric" }
                       )}
                     </span>

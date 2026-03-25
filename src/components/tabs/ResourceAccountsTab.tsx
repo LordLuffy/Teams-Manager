@@ -13,28 +13,21 @@ export default function ResourceAccountsTab({ data }: Props) {
     { key: "phoneNumber", label: t("tabs.resourceAccounts.phone") },
     {
       key: "licensed",
-      label: "Licencié",
-      tooltip: "Indique si ce compte ressource possède une licence Teams Phone Resource Account. Cette licence est obligatoire pour lui affecter un numéro de téléphone PSTN.",
-      render: (v) => (
-        <span className={`badge ${v === "Oui" ? "badge-success" : "badge-neutral"}`}>
-          {String(v)}
-        </span>
-      ),
+      label: t("tabs.resourceAccounts.licensed"),
+      tooltip: t("tabs.resourceAccounts.licensedTooltip"),
+      render: (v) => {
+        const isYes = v === "Oui" || v === "true";
+        return <span className={`badge ${isYes ? "badge-success" : "badge-neutral"}`}>{isYes ? t("common.yes") : t("common.no")}</span>;
+      },
     },
   ];
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--info-bg)", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 18 }}>
-        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-          Les <strong>comptes ressources</strong> sont des identités virtuelles (non-humaines) auxquelles on peut attribuer un numéro PSTN. Chaque compte est lié à une file d'attente ou un standard automatique. Une licence <em>Teams Phone Resource Account</em> est nécessaire pour l'attribution d'un numéro.
-        </p>
+        <p style={{ color: "var(--info)", fontSize: 13, margin: 0, lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: t("tabs.resourceAccounts.infoDesc") }} />
       </div>
-      <DataTable<ResourceAccount>
-        columns={columns}
-        data={data}
-        exportFilename="comptes_ressources.csv"
-      />
+      <DataTable<ResourceAccount> columns={columns} data={data} exportFilename="resource_accounts.csv" />
     </>
   );
 }

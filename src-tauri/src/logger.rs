@@ -10,11 +10,11 @@ use std::{
 use tauri::AppHandle;
 use tauri::Manager;
 
-/// Active ou désactive la génération de logs. Désactivé par défaut.
+/// Enables or disables log output. Disabled by default.
 static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
 
-/// Chemin du fichier de log. Initialisé une seule fois, puis potentiellement
-/// remplacé par un chemin personnalisé via `set_custom_path`.
+/// Log file path. Initialized once, then optionally
+/// replaced by a custom path via `set_custom_path`.
 static LOG_FILE_PATH: OnceLock<RwLock<PathBuf>> = OnceLock::new();
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -30,28 +30,28 @@ pub fn init(app: &AppHandle, custom_path: Option<&str>) -> Result<PathBuf, Strin
     let path = if let Some(cp) = custom_path.filter(|s| !s.trim().is_empty()) {
         let dir = PathBuf::from(cp.trim());
         std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Impossible de créer le dossier de logs personnalisé : {e}"))?;
+            .map_err(|e| format!("Failed to create custom log directory: {e}"))?;
         dir.join("teams-manager.log")
     } else {
         let log_dir = app
             .path()
             .app_log_dir()
-            .map_err(|e| format!("Impossible de localiser le dossier de logs : {e}"))?;
+            .map_err(|e| format!("Failed to locate log directory: {e}"))?;
         std::fs::create_dir_all(&log_dir)
-            .map_err(|e| format!("Impossible de créer le dossier de logs : {e}"))?;
+            .map_err(|e| format!("Failed to create log directory: {e}"))?;
         log_dir.join("teams-manager.log")
     };
 
     let _ = LOG_FILE_PATH.set(RwLock::new(path.clone()));
-    // Ne pas appeler info() ici — le debug peut être désactivé au démarrage
+    // Do not call info() here — debug may be disabled at startup
     Ok(path)
 }
 
-/// Met à jour le chemin du fichier de log à chaud (sans redémarrage).
+/// Updates the log file path at runtime (without restart).
 pub fn set_custom_path(dir: &str) -> Result<PathBuf, String> {
     let dir_path = PathBuf::from(dir.trim());
     std::fs::create_dir_all(&dir_path)
-        .map_err(|e| format!("Impossible de créer le dossier de logs : {e}"))?;
+        .map_err(|e| format!("Failed to create log directory: {e}"))?;
     let path = dir_path.join("teams-manager.log");
     if let Some(lock) = LOG_FILE_PATH.get() {
         if let Ok(mut w) = lock.write() {
@@ -61,13 +61,13 @@ pub fn set_custom_path(dir: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Retourne le chemin actuel du fichier de log.
+/// Returns the current log file path.
 pub fn current_path() -> Option<PathBuf> {
     LOG_FILE_PATH.get()?.read().ok().map(|g| g.clone())
 }
 
 fn append(level: &str, message: &str) {
-    // Si le mode débogage est désactivé, aucun log n'est écrit
+    // If debug mode is disabled, no log is written
     if !DEBUG_ENABLED.load(Ordering::Relaxed) {
         return;
     }

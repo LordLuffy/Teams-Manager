@@ -27,10 +27,12 @@ export default function FreeNumbersTab({ data }: Props) {
         </div>
         <div>
           <p style={{ color: "var(--text-1)", fontSize: 22, fontWeight: 700, margin: 0, lineHeight: 1 }}>{data.length}</p>
-          <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>numéro{data.length !== 1 ? "s" : ""} libre{data.length !== 1 ? "s" : ""}</p>
+          <p style={{ color: "var(--text-3)", fontSize: 12, marginTop: 3 }}>
+            {data.length !== 1 ? t("tabs.freeNumbers.countPlural") : t("tabs.freeNumbers.countSingular")}
+          </p>
         </div>
       </div>
-      <DataTable<FreeNumber> columns={columns} data={data} exportFilename="numeros_libres.csv" />
+      <DataTable<FreeNumber> columns={columns} data={data} exportFilename="free_numbers.csv" />
     </div>
   );
 }

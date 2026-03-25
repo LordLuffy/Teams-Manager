@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "../i18n";
 
 export interface Column<T> {
   key: string;
@@ -19,6 +20,7 @@ interface Props<T extends object> {
 const PAGE_SIZE = 50;
 
 export default function DataTable<T extends object>({ columns, data, exportFilename, expandRow }: Props<T>) {
+  const { t } = useI18n();
   const defaultSortKey = columns[0]?.key ?? null;
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey);
@@ -116,7 +118,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
           <input
             className="input"
             style={{ paddingLeft: 32, maxWidth: 320 }}
-            placeholder="Rechercher..."
+            placeholder={t("common.search")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -125,7 +127,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
           />
         </div>
         <span style={{ color: "var(--text-3)", fontSize: 12, whiteSpace: "nowrap" }}>
-          {filtered.length} résultat{filtered.length !== 1 ? "s" : ""}
+          {filtered.length} {filtered.length !== 1 ? t("common.results") : t("common.result")}
         </span>
         <button className="btn btn-ghost btn-sm" onClick={handleExport}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -133,7 +135,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Exporter CSV
+          {t("common.exportCsv")}
         </button>
       </div>
 
@@ -145,7 +147,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
               <line x1="9" y1="9" x2="15" y2="15" />
               <line x1="15" y1="9" x2="9" y2="15" />
             </svg>
-            <p style={{ color: "var(--text-3)", fontSize: 13, margin: 0 }}>Aucune donnée</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13, margin: 0 }}>{t("common.noData")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12 }}>
@@ -153,7 +155,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <p style={{ color: "var(--text-3)", fontSize: 13, margin: 0 }}>Aucun résultat pour «{search}»</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13, margin: 0 }}>{t("common.noResults").replace("{{q}}", search)}</p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -189,7 +191,7 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
                           <td style={{ width: 32, padding: "0 6px", textAlign: "center" }}>
                             <button
                               onClick={() => toggleExpand(globalIdx)}
-                              title={expanded ? "Réduire" : "Détails"}
+                              title={expanded ? t("common.collapse") : t("common.details")}
                               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, padding: "2px 4px", borderRadius: 3, transition: "color .15s" }}
                             >{expanded ? "▼" : "▶"}</button>
                           </td>
@@ -221,9 +223,9 @@ export default function DataTable<T extends object>({ columns, data, exportFilen
 
       {totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
-          <span style={{ color: "var(--text-3)", fontSize: 12 }}>Page {page} / {totalPages}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Précédent</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Suivant</button>
+          <span style={{ color: "var(--text-3)", fontSize: 12 }}>{t("common.pageOf").replace("{{p}}", String(page)).replace("{{t}}", String(totalPages))}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>{t("common.prev")}</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>{t("common.next")}</button>
         </div>
       )}
     </div>

@@ -47,7 +47,7 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setRuntimeError(message);
-      await logFrontendError("actualisation des données", error);
+      await logFrontendError("data refresh", error);
     } finally {
       setLoading(false);
     }
@@ -67,8 +67,8 @@ export default function App() {
           setScreen("auth");
         }
       } catch (error) {
-        await logFrontendError("initialisation de l'application", error);
-        setRuntimeError("Impossible de charger la configuration locale.");
+        await logFrontendError("app initialization", error);
+        setRuntimeError("Failed to load local configuration.");
         setScreen("auth");
       }
     })();
@@ -78,7 +78,7 @@ export default function App() {
     try {
       await invoke("disconnect");
     } catch (error) {
-      await logFrontendError("déconnexion", error);
+      await logFrontendError("disconnect", error);
     }
     setData(null);
     setRuntimeError(null);

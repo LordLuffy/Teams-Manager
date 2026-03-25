@@ -7,8 +7,8 @@ pub struct UpdateInfo {
     pub notes: Option<String>,
 }
 
-/// Vérifie si une nouvelle version est disponible sur GitHub Releases.
-/// Retourne Some(UpdateInfo) si une mise à jour existe, None sinon.
+/// Checks if a new version is available on GitHub Releases.
+/// Returns Some(UpdateInfo) if an update is available, None otherwise.
 #[tauri::command]
 pub async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
     let updater = app
@@ -24,7 +24,7 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, S
     }))
 }
 
-/// Télécharge et installe la dernière mise à jour, puis redémarre l'application.
+/// Downloads and installs the latest update, then restarts the application.
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     let updater = app
@@ -36,7 +36,7 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
         .check()
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Aucune mise à jour disponible".to_string())?;
+        .ok_or_else(|| "No update available".to_string())?;
 
     update
         .download_and_install(|_chunk, _total| {}, || {})

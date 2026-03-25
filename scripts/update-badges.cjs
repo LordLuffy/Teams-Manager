@@ -27,17 +27,29 @@ function firstExisting(paths) {
   return null;
 }
 
+// shields.io static badge path encoding:
+// hyphens → "--", underscores → "__", spaces → "_", then percent-encode
+function shieldsEncode(str) {
+  return encodeURIComponent(
+    String(str)
+      .replace(/-/g, "--")
+      .replace(/_/g, "__")
+      .replace(/\s+/g, "_")
+  );
+}
+
 function badge(label, message, color, logo, logoColor = null) {
-  let url = `https://img.shields.io/badge/${encodeURIComponent(label)}-${encodeURIComponent(message)}-${color}?style=for-the-badge`;
+  let url = `https://img.shields.io/badge/${shieldsEncode(label)}-${shieldsEncode(message)}-${color}?style=for-the-badge`;
   if (logo) url += `&logo=${encodeURIComponent(logo)}`;
   if (logoColor) url += `&logoColor=${encodeURIComponent(logoColor)}`;
-  return `![${label}](${url})`;
+  return `<img alt="${label}" src="${url}" />`;
 }
 
 /* -------------------- Config -------------------- */
 
-const githubOwner = "LordLuffy";   // 🔁 à remplacer
-const githubRepo = "Teams-Manager";    // 🔁 à remplacer
+// In CI: GITHUB_REPOSITORY = "owner/repo" (provided automatically by GitHub Actions)
+// Locally: fallback to default values
+const [githubOwner, githubRepo] = (process.env.GITHUB_REPOSITORY || "Xenovyrion/Teams-Manager").split("/");
 
 /* -------------------- Paths -------------------- */
 
@@ -61,7 +73,7 @@ const readmePath = path.join(root, "README.md");
 /* -------------------- Validation -------------------- */
 
 if (!fileExists(readmePath)) {
-  throw new Error("README.md introuvable.");
+  throw new Error("README.md not found.");
 }
 
 /* -------------------- Load files -------------------- */
@@ -154,87 +166,96 @@ if (pkg?.license) {
 
     if (content.includes("mit license")) license = "MIT";
     else if (content.includes("apache")) license = "Apache-2.0";
-    else if (content.includes("gnu")) license = "GPL";
+    else if (content.includes("gnu")) license = "GPL-3.0";
     else license = "Custom";
   }
 }
 
-/* -------------------- Build badges -------------------- */
+/* -------------------- Build badge rows -------------------- */
 
-const badges = [];
+/* ── Row 1 — General (release, license, platform) ── */
+const generalBadges = [];
 
-/* Release (GitHub) */
-if (githubOwner !== "TON-USER" && githubRepo !== "TON-REPO") {
-  badges.push(
-    `![Release](https://img.shields.io/github/v/release/${githubOwner}/${githubRepo}?style=for-the-badge)`
+if (githubOwner && githubRepo) {
+  generalBadges.push(
+    `<img alt="Release" src="https://img.shields.io/github/v/release/${githubOwner}/${githubRepo}?style=for-the-badge" />`
   );
 }
 
-/* License */
 if (license) {
-  badges.push(
+  generalBadges.push(
     badge("License", license, "F4C430")
   );
 }
 
-/* Stack */
+// Platform
+generalBadges.push(
+  badge("Platform", "Windows", "0078D4", "windows11", "white")
+);
+
+/* ── Row 2 — Tech stack (languages & frameworks) ── */
+const stackBadges = [];
+
 if (tauriVersion) {
-  badges.push(
+  stackBadges.push(
     badge("Tauri", tauriVersion, "24C8DB", "tauri", "white")
   );
 }
 
 if (rustVersion) {
-  badges.push(
+  stackBadges.push(
     badge("Rust", rustVersion, "000000", "rust")
   );
 }
 
 if (tsVersion) {
-  badges.push(
+  stackBadges.push(
     badge("TypeScript", tsVersion, "3178C6", "typescript", "white")
   );
 }
 
 if (reactVersion) {
-  badges.push(
+  stackBadges.push(
     badge("React", reactVersion, "20232A", "react", "61DAFB")
   );
 }
 
 if (nodeVersion) {
-  badges.push(
+  stackBadges.push(
     badge("Node.js", nodeVersion, "339933", "nodedotjs", "white")
   );
 }
 
-/* CSS (fixe) */
-badges.push(
+/* CSS (fixed) */
+stackBadges.push(
   badge("CSS", "3", "1572B6", "css3", "white")
 );
 
 /* -------------------- Inject into README -------------------- */
 
-const readme = readText(readmePath);
+let readme = readText(readmePath);
 
-const start = "<!-- BADGES:START -->";
-const end = "<!-- BADGES:END -->";
-
-if (!readme.includes(start) || !readme.includes(end)) {
-  throw new Error("Markers BADGES manquants dans README.md");
+function injectBlock(content, startMarker, endMarker, badges) {
+  if (!content.includes(startMarker) || !content.includes(endMarker)) {
+    throw new Error(`Markers ${startMarker} not found in README.md`);
+  }
+  // No blank line between marker and badges — keeps <p align="center"> centering intact
+  const newBlock = `${startMarker}\n${badges.join("\n")}\n${endMarker}`;
+  return content.replace(
+    new RegExp(`${escapeRegex(startMarker)}([\\s\\S]*?)${escapeRegex(endMarker)}`),
+    newBlock
+  );
 }
 
-const newBlock = `${start}
-<p align="center">
-  ${badges.join("\n  ")}
-</p>
-${end}`;
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-const updated = readme.replace(
-  /<!-- BADGES:START -->([\s\S]*?)<!-- BADGES:END -->/,
-  newBlock
-);
+readme = injectBlock(readme, "<!-- BADGES:START -->", "<!-- BADGES:END -->", generalBadges);
+readme = injectBlock(readme, "<!-- STACK:START -->",  "<!-- STACK:END -->",  stackBadges);
 
-fs.writeFileSync(readmePath, updated, "utf8");
+fs.writeFileSync(readmePath, readme, "utf8");
 
-console.log("✅ README mis à jour avec les badges !");
+console.log("✅ README updated with badges!");
+console.log(`   General : ${generalBadges.length} badge(s)`);
+console.log(`   Stack   : ${stackBadges.length} badge(s)`);

@@ -1,11 +1,11 @@
-# cargo-deny configuration pour Teams Manager
-# Exécuter : cargo deny check   (depuis src-tauri/)
+# cargo-deny configuration for Teams Manager
+# Run: cargo deny check   (from src-tauri/)
 
-# ── Advisories (vulnérabilités et crates non maintenus) ──────────────────────
+# ── Advisories (vulnerabilities and unmaintained crates) ──────────────────────
 [advisories]
-# Crates non maintenus tirés en transitivité par Tauri/wry — aucune action possible de notre côté.
+# Unmaintained crates pulled transitively by Tauri/wry — no action possible on our end.
 ignore = [
-  # gtk-rs GTK3 bindings (Linux uniquement, non inclus dans le binaire Windows)
+  # gtk-rs GTK3 bindings (Linux only, not included in the Windows binary)
   "RUSTSEC-2024-0411",  # gdkwayland-sys
   "RUSTSEC-2024-0412",  # gdk
   "RUSTSEC-2024-0413",  # atk
@@ -17,11 +17,11 @@ ignore = [
   "RUSTSEC-2024-0419",  # gtk-sys
   "RUSTSEC-2024-0420",  # gtk3-macros
 
-  # Crates utilitaires non maintenus (tirés par tauri-utils / tauri-macros)
+  # Unmaintained utility crates (pulled by tauri-utils / tauri-macros)
   "RUSTSEC-2024-0370",  # proc-macro-error
   "RUSTSEC-2025-0057",  # fxhash
 
-  # unic-* (tirés par tauri-utils pour la gestion des identifiants Unicode)
+  # unic-* (pulled by tauri-utils for Unicode identifier handling)
   "RUSTSEC-2025-0075",
   "RUSTSEC-2025-0080",
   "RUSTSEC-2025-0081",
@@ -29,40 +29,40 @@ ignore = [
   "RUSTSEC-2025-0100",
 ]
 
-# uds_windows est yanked mais tiré en transitivité par tauri-plugin-opener via zbus.
-# On ne peut pas le mettre à jour directement — on passe en warn jusqu'à ce que Tauri le corrige.
+# uds_windows is yanked but pulled transitively by tauri-plugin-opener via zbus.
+# Cannot update it directly — set to warn until Tauri fixes it.
 yanked = "warn"
 
-# ── Licences ─────────────────────────────────────────────────────────────────
+# ── Licenses ──────────────────────────────────────────────────────────────────
 [licenses]
-# Ce projet est distribué sous GPL-3.0.
-# Les dépendances ci-dessous utilisent des licences permissives (MIT, Apache, BSD…)
-# toutes compatibles avec la GPL-3.0.
+# This project is distributed under GPL-3.0.
+# The dependencies below use permissive licenses (MIT, Apache, BSD…)
+# all compatible with GPL-3.0.
 allow = [
   "MIT",
-  "MIT-0",              # MIT sans clause d'attribution (dunce)
+  "MIT-0",              # MIT without attribution clause (dunce)
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",  # rustix, linux-raw-sys, wasi, wit-bindgen
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",                # ring, rustls, hyper-rustls
   "0BSD",               # adler2
-  "BSL-1.0",            # ryu (Boost Software License — permissif)
+  "BSL-1.0",            # ryu (Boost Software License — permissive)
   "Zlib",               # bytemuck, miniz_oxide, objc2-*
   "Unlicense",          # aho-corasick, memchr, walkdir
-  "CC0-1.0",            # dunce (domaine public)
-  "CDLA-Permissive-2.0", # webpki-roots (Linux Foundation — permissif pour données)
-  "Unicode-3.0",        # icu_* crates (tirés par idna/url/reqwest)
-  "MPL-2.0",            # cssparser, selectors, option-ext (tirés par tauri-utils/wry)
-  "LGPL-2.1-or-later",  # r-efi (EFI/UEFI — target WASI/Linux, non lié sur Windows)
+  "CC0-1.0",            # dunce (public domain)
+  "CDLA-Permissive-2.0", # webpki-roots (Linux Foundation — permissive for data)
+  "Unicode-3.0",        # icu_* crates (pulled by idna/url/reqwest)
+  "MPL-2.0",            # cssparser, selectors, option-ext (pulled by tauri-utils/wry)
+  "LGPL-2.1-or-later",  # r-efi (EFI/UEFI — WASI/Linux target, not linked on Windows)
 ]
 
-# ── Interdictions ─────────────────────────────────────────────────────────────
+# ── Bans ──────────────────────────────────────────────────────────────────────
 [bans]
-# Interdire les crates avec des CVE connues non corrigées (au-delà des "unmaintained")
+# Deny crates with known unpatched CVEs (beyond "unmaintained")
 deny = []
 
-# ── Sources autorisées ────────────────────────────────────────────────────────
+# ── Allowed sources ───────────────────────────────────────────────────────────
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"

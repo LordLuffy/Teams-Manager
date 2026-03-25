@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -46,16 +46,15 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Teams Manager ${{ github.ref_name }}'
           releaseBody: |
-            Fixes :
-              - Fixed the size of the settings window
+            ## ⚡ Improvements / Enhancements :
+              - Update window available
+              - Changing the language of the README file
 
-            New features :
-              - Redesigned the settings screen UI
-              - Added predefined themes to the app
-              - Added multilingual support : FR / EN / DE / ES
-              - Added a debug mode
+            ## 🐞 Bug Fixes / Fixes :
+              - Translation
 
-            Please feel free to submit your feedback via [GitHub Issues](https://github.com/LordLuffy/Teams-Manager/issues) to help improve future versions.
+            ## ℹ️ Feedback :
+            Please feel free to submit your feedback via [GitHub Issues](https://github.com/Xenovyrion/Teams-Manager/issues) to help improve future versions.
           releaseDraft: false
           prerelease: false
 
