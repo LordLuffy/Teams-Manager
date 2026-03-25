@@ -712,6 +712,106 @@ fn log_frontend_error(context: String, message: String) {
     logger::error(&format!("Frontend - {context} : {message}"));
 }
 
+// ─── License management ──────────────────────────────────────────────────────
+
+/// Returns a valid Graph access token, refreshing it automatically if expired.
+async fn get_valid_access_token(state: &State<'_, Arc<AppState>>) -> Result<String, String> {
+    let current = {
+        state.token.lock().await.as_ref().cloned()
+            .ok_or("Not authenticated. Please sign in.")?
+    };
+    if current.is_expired() {
+        let refresh = current.refresh_token.clone()
+            .ok_or("Session expired and no refresh token available.")?;
+        let tenant_id = state.tenant_id.lock().await.clone();
+        let client_id = state.client_id.lock().await.clone();
+        let refreshed = auth::refresh_access_token(
+            &reqwest::Client::new(), &tenant_id, &client_id, &refresh,
+        ).await?;
+        *state.token.lock().await = Some(refreshed.clone());
+        Ok(refreshed.access_token)
+    } else {
+        Ok(current.access_token)
+    }
+}
+
+/// Calls the Graph `POST /users/{upn}/assignLicense` endpoint.
+/// `add = true` assigns the SKU; `add = false` removes it.
+async fn assign_license_graph(
+    client: &reqwest::Client,
+    token: &str,
+    upn: &str,
+    sku_id: &str,
+    add: bool,
+) -> Result<(), String> {
+    let url = format!("https://graph.microsoft.com/v1.0/users/{upn}/assignLicense");
+    let body = if add {
+        serde_json::json!({ "addLicenses": [{"skuId": sku_id}], "removeLicenses": [] })
+    } else {
+        serde_json::json!({ "addLicenses": [], "removeLicenses": [sku_id] })
+    };
+    let resp = client
+        .post(&url)
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !resp.status().is_success() {
+        let st = resp.status().as_u16();
+        let txt = resp.text().await.unwrap_or_default();
+        let json: serde_json::Value = serde_json::from_str(&txt).unwrap_or_default();
+        let msg = json
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(&txt);
+        return Err(format!("{upn}: HTTP {st} — {msg}"));
+    }
+    Ok(())
+}
+
+/// Fetches only subscriptions and user-license data (fast partial refresh after License Manager saves).
+#[tauri::command]
+async fn refresh_licenses_data(
+    state: State<'_, Arc<AppState>>,
+) -> Result<graph::LicensesSnapshot, String> {
+    let token = get_valid_access_token(&state).await?;
+    let http = reqwest::Client::new();
+    graph::fetch_licenses_quick(&http, &token).await
+}
+
+/// Applies license add/remove operations for a given SKU in bulk.
+/// Returns the list of per-user error strings (empty = full success).
+#[tauri::command]
+async fn manage_licenses(
+    state: State<'_, Arc<AppState>>,
+    upns_to_add: Vec<String>,
+    upns_to_remove: Vec<String>,
+    sku_id: String,
+) -> Result<Vec<String>, String> {
+    let token = get_valid_access_token(&state).await?;
+    let http = reqwest::Client::new();
+    let mut errors: Vec<String> = Vec::new();
+    for upn in &upns_to_add {
+        if let Err(e) = assign_license_graph(&http, &token, upn, &sku_id, true).await {
+            errors.push(e);
+        }
+    }
+    for upn in &upns_to_remove {
+        if let Err(e) = assign_license_graph(&http, &token, upn, &sku_id, false).await {
+            errors.push(e);
+        }
+    }
+    logger::info(&format!(
+        "manage_licenses: +{} -{} errors={}",
+        upns_to_add.len(),
+        upns_to_remove.len(),
+        errors.len()
+    ));
+    Ok(errors)
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -764,6 +864,8 @@ pub fn run() {
             get_log_path,
             log_frontend_error,
             set_debug_mode,
+            manage_licenses,
+            refresh_licenses_data,
             updater::check_update,
             updater::install_update,
         ])

@@ -146,6 +146,7 @@ pub struct UserLicense {
 pub struct Subscription {
     pub friendly_name: String,
     pub sku: String,
+    pub sku_id: String,
     pub purchased: i64,
     pub suspended: i64,
     pub consumed: i64,
@@ -248,6 +249,94 @@ pub struct DirectoryUser {
     pub phone_number: String,
     pub has_phone_license: String,
     pub user_type: String,
+}
+
+/// Lightweight snapshot returned by `fetch_licenses_quick`.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LicensesSnapshot {
+    pub subscriptions: Vec<Subscription>,
+    pub user_licenses: Vec<UserLicense>,
+}
+
+/// Fetches only subscriptions and user-license assignments — much faster than `collect_all`.
+/// Used for a targeted refresh after the License Manager saves changes.
+pub async fn fetch_licenses_quick(client: &Client, token: &str) -> Result<LicensesSnapshot, String> {
+    let mut snap = LicensesSnapshot::default();
+    let mut sku_id_map: std::collections::HashMap<String, String> = Default::default();
+
+    // ── 1. Subscriptions ─────────────────────────────────────────────────────
+    let skus = fetch_pages(client, token, &format!("{V1}/subscribedSkus")).await
+        .map_err(|e| format!("Subscriptions: {e}"))?;
+
+    for s in &skus {
+        let id = str_val(s, "skuId");
+        let part = str_val(s, "skuPartNumber");
+        if !id.is_empty() {
+            sku_id_map.insert(id.clone(), part.clone());
+        }
+        let enabled = s.get("prepaidUnits").and_then(|u| u.get("enabled")).and_then(|v| v.as_i64()).unwrap_or(0);
+        let suspended = s.get("prepaidUnits").and_then(|u| u.get("suspended")).and_then(|v| v.as_i64()).unwrap_or(0);
+        let consumed = i64_val(s, "consumedUnits");
+        let available = enabled - consumed;
+        let sku = str_val(s, "skuPartNumber");
+        let is_free = is_free_subscription_sku(&sku);
+        snap.subscriptions.push(Subscription {
+            friendly_name: friendly_sku(&sku).to_string(),
+            sku,
+            sku_id: id,
+            purchased: enabled,
+            suspended,
+            consumed,
+            available,
+            status: compute_subscription_status(available, consumed, enabled, is_free),
+            is_free,
+        });
+    }
+
+    // ── 2. User licenses ─────────────────────────────────────────────────────
+    let user_url = format!(
+        "{V1}/users?$select=displayName,userPrincipalName,assignedLicenses,accountEnabled,userType&$top=999"
+    );
+    let users = fetch_pages(client, token, &user_url).await
+        .map_err(|e| format!("Users: {e}"))?;
+
+    for u in &users {
+        let upn = str_val(u, "userPrincipalName");
+        let name = str_val(u, "displayName");
+        let enabled = bool_val(u, "accountEnabled");
+        let raw_user_type = str_val(u, "userType");
+        let user_type_display: String = if raw_user_type.eq_ignore_ascii_case("Guest") {
+            "Externe".into()
+        } else {
+            "Interne".into()
+        };
+
+        let lic_skus: Vec<String> = u
+            .get("assignedLicenses")
+            .and_then(|l| l.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|l| l.get("skuId")?.as_str())
+                    .filter_map(|id| sku_id_map.get(id))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for sku in &lic_skus {
+            snap.user_licenses.push(UserLicense {
+                display_name: name.clone(),
+                upn: upn.clone(),
+                sku_part_number: sku.clone(),
+                friendly_name: friendly_sku(sku).to_string(),
+                account_enabled: if enabled { "Oui".into() } else { "Non".into() },
+                user_type: user_type_display.clone(),
+            });
+        }
+    }
+
+    Ok(snap)
 }
 
 async fn fetch_pages(client: &Client, token: &str, url: &str) -> Result<Vec<Value>, String> {
@@ -1243,7 +1332,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 let id = str_val(s, "skuId");
                 let part = str_val(s, "skuPartNumber");
                 if !id.is_empty() {
-                    sku_id_map.insert(id, part.clone());
+                    sku_id_map.insert(id.clone(), part.clone());
                 }
 
                 let enabled = s.get("prepaidUnits").and_then(|u| u.get("enabled")).and_then(|v| v.as_i64()).unwrap_or(0);
@@ -1256,6 +1345,7 @@ pub async fn collect_all(client: &Client, token: &str, tenant_id: &str, client_i
                 data.subscriptions.push(Subscription {
                     friendly_name: friendly_sku(&sku).to_string(),
                     sku,
+                    sku_id: id,
                     purchased: enabled,
                     suspended,
                     consumed,

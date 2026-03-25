@@ -23,6 +23,7 @@ interface Props {
   loading: boolean;
   runtimeError: string | null;
   onRefresh: () => void;
+  onRefreshLicenses: () => void;
   onDisconnect: () => void;
   onSetup: () => void;
 }
@@ -41,7 +42,7 @@ type PsState = "idle" | "installing" | "done" | "error";
 
 const PS_MODULE_MARKER = "Module PowerShell MicrosoftTeams indisponible";
 
-export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onDisconnect, onSetup }: Props) {
+export default function Dashboard({ data, lastRefresh, loading, runtimeError, onRefresh, onRefreshLicenses, onDisconnect, onSetup }: Props) {
   const { t, lang } = useI18n();
   const [activeTab, setActiveTab] = useState<TabId>("phoneUsers");
   const [psState, setPsState] = useState<PsState>("idle");
@@ -169,7 +170,7 @@ export default function Dashboard({ data, lastRefresh, loading, runtimeError, on
       case "freeNumbers": return <FreeNumbersTab data={data.freeNumbers} />;
       case "orphanLicenses": return <OrphanLicensesTab data={data.orphanLicenses} freeNumbers={data.freeNumbers} onActionDone={onRefresh} />;
       case "userLicenses": return <UserLicensesTab data={data.userLicenses} />;
-      case "subscriptions": return <SubscriptionsTab data={data.subscriptions} />;
+      case "subscriptions": return <SubscriptionsTab data={data.subscriptions} allUsers={data.directoryUsers} userLicenses={data.userLicenses} onActionDone={onRefreshLicenses} />;
       case "callQueues": return <CallQueuesTab data={data.callQueues} />;
       case "autoAttendants": return <AutoAttendantsTab data={data.autoAttendants} />;
       case "resourceAccounts": return <ResourceAccountsTab data={data.resourceAccounts} />;

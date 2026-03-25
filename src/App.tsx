@@ -53,6 +53,16 @@ export default function App() {
     }
   }, []);
 
+  // Partial refresh: only subscriptions + userLicenses (used after License Manager saves).
+  const handleRefreshLicenses = useCallback(async () => {
+    try {
+      const snap = await invoke<{ subscriptions: DashboardData["subscriptions"]; userLicenses: DashboardData["userLicenses"] }>("refresh_licenses_data");
+      setData(prev => prev ? { ...prev, subscriptions: snap.subscriptions, userLicenses: snap.userLicenses } : prev);
+    } catch (error) {
+      await logFrontendError("licenses refresh", error);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -110,6 +120,7 @@ export default function App() {
         loading={loading}
         runtimeError={runtimeError}
         onRefresh={handleRefresh}
+        onRefreshLicenses={handleRefreshLicenses}
         onDisconnect={handleDisconnect}
         onSetup={() => setShowSettings(true)}
       />

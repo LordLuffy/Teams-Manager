@@ -1,8 +1,15 @@
+import { useState } from "react";
 import DataTable, { type Column } from "../DataTable";
-import type { Subscription } from "../../types";
+import type { Subscription, DirectoryUser, UserLicense } from "../../types";
 import { useI18n } from "../../i18n";
+import LicenseManagerModal from "../LicenseManagerModal";
 
-interface Props { data: Subscription[]; }
+interface Props {
+  data: Subscription[];
+  allUsers: DirectoryUser[];
+  userLicenses: UserLicense[];
+  onActionDone: () => void;
+}
 
 function availableCell(v: unknown, row: Subscription) {
   const n = Number(v);
@@ -10,9 +17,10 @@ function availableCell(v: unknown, row: Subscription) {
   return <span style={{ color, fontWeight: row.status === "OK" ? 500 : 700 }}>{n}</span>;
 }
 
-export default function SubscriptionsTab({ data }: Props) {
+export default function SubscriptionsTab({ data, allUsers, userLicenses, onActionDone }: Props) {
   const { t } = useI18n();
   const totalConsumed = data.reduce((sum, s) => sum + s.consumed, 0);
+  const [manageSub, setManageSub] = useState<Subscription | null>(null);
 
   function statusBadge(status: string) {
     if (status === "OK") return <span className="badge badge-success">{t("tabs.subscriptions.statusOk")}</span>;
@@ -30,6 +38,20 @@ export default function SubscriptionsTab({ data }: Props) {
     { key: "consumed", label: t("tabs.subscriptions.assigned") },
     { key: "available", label: t("tabs.subscriptions.available"), render: availableCell },
     { key: "status", label: t("common.status"), render: (v) => statusBadge(String(v)) },
+    {
+      key: "_actions",
+      label: "",
+      render: (_v, row) =>
+        row.isFree ? null : (
+          <button
+            className="btn"
+            style={{ padding: "2px 10px", fontSize: 11, fontWeight: 600 }}
+            onClick={() => setManageSub(row)}
+          >
+            {t("tabs.subscriptions.manage")}
+          </button>
+        ),
+    },
   ];
 
   return (
@@ -59,6 +81,16 @@ export default function SubscriptionsTab({ data }: Props) {
         dangerouslySetInnerHTML={{ __html: t("tabs.subscriptions.statusInfo") }}
       />
       <DataTable<Subscription> columns={columns} data={data} exportFilename="subscriptions.csv" />
+
+      {manageSub && (
+        <LicenseManagerModal
+          sub={manageSub}
+          allUsers={allUsers}
+          userLicenses={userLicenses}
+          onClose={() => setManageSub(null)}
+          onSaved={onActionDone}
+        />
+      )}
     </div>
   );
 }

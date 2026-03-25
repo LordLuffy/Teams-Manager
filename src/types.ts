@@ -46,6 +46,7 @@ export interface UserLicense {
 export interface Subscription {
   friendlyName: string;
   sku: string;
+  skuId: string;
   purchased: number;
   suspended: number;
   consumed: number;
