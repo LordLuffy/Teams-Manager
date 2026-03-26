@@ -46,9 +46,12 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Teams Manager ${{ github.ref_name }}'
           releaseBody: |
+            ## ✨ New features :
+              - Added support for adding or removing licenses from users
+
             ## ⚡ Improvements / Enhancements :
-              - Update window available
-              - Changing the language of the README file
+              - Disabling right-click and web options
+              - Disabling the context menu
 
             ## 🐞 Bug Fixes / Fixes :
               - Translation
